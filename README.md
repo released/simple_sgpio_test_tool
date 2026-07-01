@@ -16,6 +16,10 @@ The PC GUI connects to the M032 EVB over USB HID, then asks the bridge firmware 
 - Clock range: 100 kHz to 400 kHz.
 - Not in scope: Pico board support, I2C bridge behavior, PMBus/SMBus tabs, full `SDATA IN` frame capture.
 
+## UI Screenshot
+
+![M032 SGPIO HID Tool main UI](main.jpg)
+
 ## Quick Start
 
 1. Build and flash the M032 EVB firmware from this workspace.
