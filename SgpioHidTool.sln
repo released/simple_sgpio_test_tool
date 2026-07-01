@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "SgpioHidTool", "SgpioHidTool.vcxproj", "{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Debug|Win32.Build.0 = Debug|Win32
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Debug|x64.ActiveCfg = Debug|x64
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Debug|x64.Build.0 = Debug|x64
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Release|Win32.ActiveCfg = Release|Win32
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Release|Win32.Build.0 = Release|Win32
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Release|x64.ActiveCfg = Release|x64
+		{76D0A512-C2A6-491C-9192-64B0A8C3CA5E}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F6ECD254-1528-4DE4-9182-52BB85A47A60}
+	EndGlobalSection
+EndGlobal

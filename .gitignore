@@ -1,0 +1,25 @@
+# Local agent/runtime state
+.agents/
+teraterm.log
+
+# Local GUI runtime state and captured lab logs
+build/sgpio_hid_tool.ini
+build/*.log
+build/test_log/
+
+# PC build outputs
+build/obj/
+build/*.exe
+build/*.pdb
+build/*.ilk
+build/*.idb
+build/*.iobj
+build/*.ipdb
+build/*.lib
+build/*.exp
+
+# Keil local/user outputs
+demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/lst/
+demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/obj/
+demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/*.uvguix.*
+demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/Nu_Link_Driver.ini

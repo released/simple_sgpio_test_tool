@@ -1,0 +1,4 @@
+#pragma once
+
+#define SGPIO_TOOL_BUILD_VERSION L"1.0.0.004"
+#define SGPIO_TOOL_BUILD_TIME L"2026-07-01 22:57:42"
