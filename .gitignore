@@ -2,14 +2,13 @@
 .agents/
 teraterm.log
 
-# Local GUI runtime state and captured lab logs
-build/sgpio_hid_tool.ini
+# Local GUI runtime logs
 build/*.log
-build/test_log/
 
 # PC build outputs
 build/obj/
 build/*.exe
+!build/SgpioHidTool.exe
 build/*.pdb
 build/*.ilk
 build/*.idb

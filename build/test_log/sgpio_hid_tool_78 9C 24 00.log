@@ -1,0 +1,19 @@
+﻿[22:04:31] INI loaded.
+[22:04:31] Device scan complete: 1 found
+[22:04:31] M032 SGPIO HID tool initialized.
+[22:04:31] M032 EVB SGPIO host pins: PA2=SCLK, PA0=SDOUT, PA3=SLOAD, PA1=SDIN optional.
+[22:17:03] Device scan complete: 1 found
+[22:17:04] Connected VID:PID
+[22:17:04] Connected bridge: m032-sgpio-bridge/1.0.0
+[22:17:04] Reset reason: NONE
+[22:17:54] SGPIO enabled: enabled=1 periodic=1 slots=8 clk=100000Hz interval=100ms SLOAD L0..L3=0x0 SDataOut ACT=0x002A LOCATE=0x00AA FAIL=0x00AA SDIN=-
+[22:19:37] Log saved: build\sgpio_hid_tool.log
+[22:31:14] SGPIO disabled on PA2/PA0/PA3/PA1
+[22:32:01] MCU reset command sent.
+[22:32:01] Device scan complete: 1 found
+[22:32:02] Device scan complete: 1 found
+[22:32:03] Connected VID:PID
+[22:32:03] Connected bridge: m032-sgpio-bridge/1.0.0
+[22:32:03] Reset reason: NONE
+[22:32:10] SGPIO enabled: enabled=1 periodic=1 slots=8 clk=100000Hz interval=100ms SLOAD L0..L3=0x0 SDataOut ACT=0x00F6 LOCATE=0x000A FAIL=0x000A SDIN=-
+[22:32:42] SGPIO disabled on PA2/PA0/PA3/PA1

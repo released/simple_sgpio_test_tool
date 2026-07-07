@@ -1,0 +1,8 @@
+﻿[22:39:17] MCU reset command sent.
+[22:39:17] Device scan complete: 1 found
+[22:39:19] Device scan complete: 1 found
+[22:39:19] Connected VID:PID
+[22:39:19] Connected bridge: m032-sgpio-bridge/1.0.0
+[22:39:19] Reset reason: NONE
+[22:39:24] SGPIO enabled: enabled=1 periodic=1 slots=16 clk=100000Hz interval=100ms SLOAD L0..L3=0x0 SDataOut ACT=0x1111 LOCATE=0xAAAA FAIL=0x4444 SDIN=-
+[22:39:43] SGPIO disabled on PA2/PA0/PA3/PA1

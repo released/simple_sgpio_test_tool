@@ -1,0 +1,9 @@
+﻿[22:04:31] INI loaded.
+[22:04:31] Device scan complete: 1 found
+[22:04:31] M032 SGPIO HID tool initialized.
+[22:04:31] M032 EVB SGPIO host pins: PA2=SCLK, PA0=SDOUT, PA3=SLOAD, PA1=SDIN optional.
+[22:17:03] Device scan complete: 1 found
+[22:17:04] Connected VID:PID
+[22:17:04] Connected bridge: m032-sgpio-bridge/1.0.0
+[22:17:04] Reset reason: NONE
+[22:17:54] SGPIO enabled: enabled=1 periodic=1 slots=8 clk=100000Hz interval=100ms SLOAD L0..L3=0x0 SDataOut ACT=0x002A LOCATE=0x00AA FAIL=0x00AA SDIN=-

@@ -267,7 +267,7 @@ Saved state includes:
 - expected and last-seen firmware version
 - SGPIO slot count, clock, periodic setting, interval, SLOAD raw bits, and ACT/LOCATE/FAIL masks
 
-Local runtime files such as `build\sgpio_hid_tool.ini`, saved logs, and `build\test_log` are machine-specific. Review or exclude them before publishing a public repository.
+This repository intentionally keeps `build\SgpioHidTool.exe`, `build\sgpio_hid_tool.ini`, and sanitized captures under `build\test_log` so first-time users can launch the tool and compare known-good SGPIO logs. Keep these files free of local absolute paths before publishing. Ad-hoc logs saved directly under `build\*.log` remain local-only.
 
 ## Project Structure
 
@@ -282,13 +282,18 @@ Local runtime files such as `build\sgpio_hid_tool.ini`, saved logs, and `build\t
 
 ## GitHub Upload Notes
 
-Before uploading a public copy, keep source, scripts, docs, firmware project files, and project metadata. Exclude local and generated artifacts:
+Before uploading a public copy, keep source, scripts, docs, firmware project files, project metadata, and these user-facing build artifacts:
 
+- `build\SgpioHidTool.exe`
 - `build\sgpio_hid_tool.ini`
+- `build\test_log\`
+
+Exclude local and generated artifacts:
+
 - `build\obj\`
-- `build\*.exe`, `build\*.pdb`, and other PC build outputs
+- `build\*.pdb`, `build\*.ilk`, `build\*.idb`, `build\*.iobj`, `build\*.ipdb`
+- `build\*.lib`, `build\*.exp`
 - `build\*.log`
-- `build\test_log\` unless logs are intentionally sanitized and published
 - root `teraterm.log`
 - Keil `lst\`, `obj\`, `*.uvguix.*`, and local debug-driver INI files
 
