@@ -9,13 +9,13 @@
 - Confirm Keil project includes `pdma.c`.
 - Confirm Keil project does not include the removed I2C bridge source or `i2c.c`.
 - Confirm SGPIO clock is clamped to 100 kHz through 400 kHz.
-- Confirm GitHub publish scan excludes local runtime/build artifacts and has no local absolute paths in publishable files.
+- Confirm GitHub publish scan includes the user-facing exe/ini/test_log artifacts and has no local absolute paths in publishable files.
 
 ## Build Checks
 
 - PC GUI build: PASS, `scripts\build_mfc.ps1 -Configuration Release -Platform x64`, output `build\SgpioHidTool.exe`, version `1.0.0.004`, 0 warnings, 0 errors.
 - Clean script check: PASS, `scripts\clean_mfc.bat` removed PC intermediates and preserved `build\SgpioHidTool.exe`, `build\sgpio_hid_tool.ini`, and `build\test_log`.
-- Publish scan: PASS, checked common Windows absolute-path and user-name patterns with `.gitignore` applied; no publishable-file matches.
+- Publish scan: PASS, checked common Windows absolute-path and user-name patterns with `.gitignore` applied; no publishable-file matches outside intentionally ignored local artifacts.
 - Firmware syntax check: PASS with `arm-none-eabi-gcc -std=gnu99 -fsyntax-only` for `m031_bridge_sgpio.c`, `hid_tool_api.c`, `main.c`, and `pdma.c`.
 - Firmware Keil build: NOT RUN, `UV4.exe` and `UV4.com` were not available in PATH.
 - Firmware syntax check note: `main.c` still has inherited sample warnings for printf format types.
