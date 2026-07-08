@@ -11,6 +11,107 @@
 
 namespace mfc_tool::ui {
 
+inline UINT GetDpiForHwnd(HWND hwnd) {
+    typedef UINT(WINAPI* GetDpiForWindowFn)(HWND);
+    UINT dpi = 96u;
+    HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
+    GetDpiForWindowFn get_dpi_for_window = user32 != nullptr
+        ? reinterpret_cast<GetDpiForWindowFn>(::GetProcAddress(user32, "GetDpiForWindow"))
+        : nullptr;
+
+    if (get_dpi_for_window != nullptr && hwnd != nullptr) {
+        const UINT window_dpi = get_dpi_for_window(hwnd);
+        if (window_dpi != 0u) {
+            return window_dpi;
+        }
+    }
+
+    HDC dc = ::GetDC(hwnd);
+    if (dc != nullptr) {
+        const int device_dpi = ::GetDeviceCaps(dc, LOGPIXELSX);
+        if (device_dpi > 0) {
+            dpi = static_cast<UINT>(device_dpi);
+        }
+        ::ReleaseDC(hwnd, dc);
+    }
+    return dpi;
+}
+
+inline UINT GetDpiForWnd(const CWnd& wnd) {
+    return GetDpiForHwnd(wnd.GetSafeHwnd());
+}
+
+class DpiScaler {
+public:
+    explicit DpiScaler(UINT dpi = 96u) : dpi_(dpi == 0u ? 96u : dpi) {}
+
+    static DpiScaler FromWindow(const CWnd& wnd) {
+        return DpiScaler(GetDpiForWnd(wnd));
+    }
+
+    int Scale(int value) const {
+        return ::MulDiv(value, static_cast<int>(dpi_), 96);
+    }
+
+    CSize ScaleSize(int cx, int cy) const {
+        return CSize(Scale(cx), Scale(cy));
+    }
+
+    UINT Dpi() const {
+        return dpi_;
+    }
+
+private:
+    UINT dpi_ = 96u;
+};
+
+struct LayoutMetrics {
+    int margin8;
+    int gap;
+    int row24;
+    int row26;
+    int row28;
+    int label18;
+    int comboDrop;
+};
+
+inline LayoutMetrics MetricsForWindow(const CWnd& wnd) {
+    const DpiScaler dpi = DpiScaler::FromWindow(wnd);
+    LayoutMetrics metrics = {};
+    metrics.margin8 = dpi.Scale(8);
+    metrics.gap = dpi.Scale(6);
+    metrics.row24 = dpi.Scale(24);
+    metrics.row26 = dpi.Scale(26);
+    metrics.row28 = dpi.Scale(28);
+    metrics.label18 = dpi.Scale(18);
+    metrics.comboDrop = dpi.Scale(120);
+    return metrics;
+}
+
+inline BOOL CreatePointFontForWindow(CFont& font,
+                                     const CWnd& wnd,
+                                     int point_tenths,
+                                     const wchar_t* face = L"Segoe UI") {
+    if (font.GetSafeHandle() != nullptr) {
+        font.DeleteObject();
+    }
+    if (!::IsWindow(wnd.GetSafeHwnd())) {
+        return font.CreatePointFont(point_tenths, face);
+    }
+    CClientDC dc(const_cast<CWnd*>(&wnd));
+    return font.CreatePointFont(point_tenths, face, &dc);
+}
+
+inline void ApplyFontToChildWindows(CWnd& parent, CFont& font, BOOL redraw = TRUE) {
+    if (::IsWindow(parent.GetSafeHwnd()) && font.GetSafeHandle() != nullptr) {
+        parent.SendMessageToDescendants(WM_SETFONT,
+                                        reinterpret_cast<WPARAM>(font.GetSafeHandle()),
+                                        MAKELPARAM(redraw, 0),
+                                        TRUE,
+                                        FALSE);
+    }
+}
+
 inline int MeasureTextWidth(CWnd& wnd, const std::wstring& text, int padding = 8) {
     if (!::IsWindow(wnd.GetSafeHwnd())) {
         return static_cast<int>(text.size()) * 8 + padding;

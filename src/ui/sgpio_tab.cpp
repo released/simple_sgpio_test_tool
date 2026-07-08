@@ -109,6 +109,8 @@ std::wstring FormatSdinCapture(const std::vector<std::uint8_t>& data) {
 BEGIN_MESSAGE_MAP(CSgpioTab, CWnd)
     ON_WM_CREATE()
     ON_WM_SIZE()
+    ON_WM_VSCROLL()
+    ON_WM_MOUSEWHEEL()
     ON_BN_CLICKED(IDC_SGPIO_ENABLE, &CSgpioTab::OnBtnEnable)
     ON_BN_CLICKED(IDC_SGPIO_DISABLE, &CSgpioTab::OnBtnDisable)
     ON_BN_CLICKED(IDC_SGPIO_APPLY, &CSgpioTab::OnBtnApplyNow)
@@ -121,7 +123,7 @@ END_MESSAGE_MAP()
 BOOL CSgpioTab::Create(CWnd* parent, const RECT& rect, UINT id) {
     CString cls = AfxRegisterWndClass(CS_HREDRAW | CS_VREDRAW, ::LoadCursor(nullptr, IDC_ARROW),
                                       reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1), nullptr);
-    return CWnd::CreateEx(0, cls, L"", WS_CHILD | WS_VISIBLE, rect, parent, id);
+    return CWnd::CreateEx(0, cls, L"", WS_CHILD | WS_VISIBLE | WS_VSCROLL, rect, parent, id);
 }
 
 void CSgpioTab::Bind(mfc_tool::core::BridgeService* service,
@@ -142,8 +144,8 @@ int CSgpioTab::OnCreate(LPCREATESTRUCT lpCreateStruct) {
         return -1;
     }
 
-    ui_font_.CreatePointFont(85, L"Segoe UI");
-    slot_font_.CreatePointFont(75, L"Segoe UI");
+    mfc_tool::ui::CreatePointFontForWindow(ui_font_, *this, 85);
+    mfc_tool::ui::CreatePointFontForWindow(slot_font_, *this, 75);
     auto mk_static = [this](CStatic& s, const wchar_t* text, UINT id) {
         s.Create(text, WS_CHILD | WS_VISIBLE, CRect(0, 0, 0, 0), this, id);
         s.SetFont(&ui_font_);
@@ -161,6 +163,7 @@ int CSgpioTab::OnCreate(LPCREATESTRUCT lpCreateStruct) {
     mk_btn(group_, L"SGPIO (SFF-8485 / IBPI, M032 GPIO host)", IDC_SGPIO_GROUP, BS_GROUPBOX);
     mk_static(fixed_pin_title_, L"Fixed Pins", IDC_SGPIO_FIXED_PIN_TITLE);
     mk_static(fixed_pin_value_, L"PA2=SCLK  PA0=SDOUT  PA3=SLOAD  PA1=SDIN(optional)", IDC_SGPIO_FIXED_PIN_VALUE);
+    fixed_pin_value_.ModifyStyle(SS_TYPEMASK, SS_LEFTNOWORDWRAP | SS_ENDELLIPSIS);
     mk_static(slot_count_title_, L"Slot Count", IDC_SGPIO_SLOT_COUNT_TITLE);
     mk_edit(slot_count_edit_, L"8", IDC_SGPIO_SLOT_COUNT_EDIT);
     mk_static(clock_title_, L"Clock(Hz)", IDC_SGPIO_CLOCK_TITLE);
@@ -232,41 +235,214 @@ int CSgpioTab::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
 void CSgpioTab::OnSize(UINT nType, int cx, int cy) {
     CWnd::OnSize(nType, cx, cy);
+    LayoutScrolledContent();
+}
 
-    const int margin = 8;
-    const int gap = 6;
-    const int row = 26;
-    const int right = cx - margin - 16;
-    const int inner_left = margin + 12;
+void CSgpioTab::RefreshDpiLayout() {
+    if (!::IsWindow(GetSafeHwnd())) {
+        return;
+    }
+
+    mfc_tool::ui::CreatePointFontForWindow(ui_font_, *this, 85);
+    mfc_tool::ui::CreatePointFontForWindow(slot_font_, *this, 75);
+    mfc_tool::ui::ApplyFontToChildWindows(*this, ui_font_, FALSE);
+
+    if (::IsWindow(slot_hdr_.GetSafeHwnd())) {
+        slot_hdr_.SetFont(&slot_font_, FALSE);
+        act_hdr_.SetFont(&slot_font_, FALSE);
+        locate_hdr_.SetFont(&slot_font_, FALSE);
+        fail_hdr_.SetFont(&slot_font_, FALSE);
+    }
+    for (int i = 0; i < kSgpioSlotMax; ++i) {
+        if (::IsWindow(slot_labels_[i].GetSafeHwnd())) {
+            slot_labels_[i].SetFont(&slot_font_, FALSE);
+        }
+    }
+
+    LayoutScrolledContent();
+    RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
+void CSgpioTab::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar) {
+    if (pScrollBar != nullptr) {
+        CWnd::OnVScroll(nSBCode, nPos, pScrollBar);
+        return;
+    }
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_ALL;
+    GetScrollInfo(SB_VERT, &si);
+
+    int next_offset = scroll_offset_;
+    const mfc_tool::ui::LayoutMetrics metrics = mfc_tool::ui::MetricsForWindow(*this);
+    switch (nSBCode) {
+    case SB_LINEUP:
+        next_offset -= metrics.row24;
+        break;
+    case SB_LINEDOWN:
+        next_offset += metrics.row24;
+        break;
+    case SB_PAGEUP:
+        next_offset -= static_cast<int>(si.nPage);
+        break;
+    case SB_PAGEDOWN:
+        next_offset += static_cast<int>(si.nPage);
+        break;
+    case SB_THUMBPOSITION:
+    case SB_THUMBTRACK:
+        next_offset = static_cast<int>(nPos);
+        break;
+    case SB_TOP:
+        next_offset = 0;
+        break;
+    case SB_BOTTOM:
+        next_offset = si.nMax;
+        break;
+    default:
+        break;
+    }
+    ScrollToOffset(next_offset);
+}
+
+BOOL CSgpioTab::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt) {
+    (void)nFlags;
+    (void)pt;
+    const mfc_tool::ui::LayoutMetrics metrics = mfc_tool::ui::MetricsForWindow(*this);
+    const int wheel_delta = zDelta < 0 ? -static_cast<int>(zDelta) : static_cast<int>(zDelta);
+    const int lines = (std::max)(1, wheel_delta / WHEEL_DELTA);
+    const int delta = metrics.row24 * 3 * lines;
+    ScrollToOffset(scroll_offset_ + (zDelta > 0 ? -delta : delta));
+    return TRUE;
+}
+
+int CSgpioTab::CalculateVirtualContentHeight(const CRect& client) const {
+    const mfc_tool::ui::DpiScaler dpi = mfc_tool::ui::DpiScaler::FromWindow(*this);
+    const mfc_tool::ui::LayoutMetrics metrics = mfc_tool::ui::MetricsForWindow(*this);
+    const int rows_per_col = kSgpioSlotMax / 2;
+    const int grid_rows = dpi.Scale(16) + dpi.Scale(3) + dpi.Scale(22) * rows_per_col;
+    const int control_rows = metrics.margin8 + dpi.Scale(28) + metrics.row26 * 3 + metrics.gap * 4 + dpi.Scale(4);
+    const int desired_height = control_rows + grid_rows + metrics.margin8 + dpi.Scale(18);
+    return (std::max)(client.Height(), desired_height);
+}
+
+void CSgpioTab::UpdateVerticalScroll(const CRect& client) {
+    virtual_content_height_ = CalculateVirtualContentHeight(client);
+    const int max_offset = (std::max)(0, virtual_content_height_ - client.Height());
+    if (scroll_offset_ > max_offset) {
+        scroll_offset_ = max_offset;
+    }
+    if (scroll_offset_ < 0) {
+        scroll_offset_ = 0;
+    }
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin = 0;
+    si.nMax = (std::max)(0, virtual_content_height_ - 1);
+    si.nPage = static_cast<UINT>((std::max)(1, client.Height()));
+    si.nPos = scroll_offset_;
+    SetScrollInfo(SB_VERT, &si, TRUE);
+    ShowScrollBar(SB_VERT, max_offset > 0 ? TRUE : FALSE);
+}
+
+void CSgpioTab::ScrollToOffset(int next_offset) {
+    CRect client;
+    GetClientRect(&client);
+    const int max_offset = (std::max)(0, virtual_content_height_ - client.Height());
+    next_offset = (std::max)(0, (std::min)(next_offset, max_offset));
+    if (next_offset == scroll_offset_) {
+        return;
+    }
+
+    const int delta = scroll_offset_ - next_offset;
+    scroll_offset_ = next_offset;
+    SetScrollPos(SB_VERT, scroll_offset_, TRUE);
+    ScrollWindowEx(0,
+                   delta,
+                   nullptr,
+                   nullptr,
+                   nullptr,
+                   nullptr,
+                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+    RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
+void CSgpioTab::LayoutScrolledContent() {
+    if (!::IsWindow(GetSafeHwnd())) {
+        return;
+    }
+
+    CRect client;
+    GetClientRect(&client);
+    if (client.Width() <= 0 || client.Height() <= 0) {
+        return;
+    }
+
+    UpdateVerticalScroll(client);
+
+    CRect page(client);
+    page.top -= scroll_offset_;
+    page.bottom = page.top + virtual_content_height_;
+
+    SetRedraw(FALSE);
+    LayoutControls(page);
+    SetRedraw(TRUE);
+    RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
+void CSgpioTab::LayoutControls(const CRect& r) {
+    const mfc_tool::ui::DpiScaler dpi = mfc_tool::ui::DpiScaler::FromWindow(*this);
+    const mfc_tool::ui::LayoutMetrics metrics = mfc_tool::ui::MetricsForWindow(*this);
+    const int margin = metrics.margin8;
+    const int gap = metrics.gap;
+    const int row = metrics.row26;
+    const int right = r.right - margin - dpi.Scale(16);
+    const int inner_left = r.left + margin + dpi.Scale(12);
+    const int group_h = (std::max)(dpi.Scale(250), r.Height() - margin * 2 - dpi.Scale(8));
     CRect group_rc;
     int grid_bottom = 0;
-    int y = margin + 28;
+    int y = r.top + margin + dpi.Scale(28);
     int x = inner_left;
-    int btn_w = 92;
-    int label_y = y + 4;
+    int btn_w = dpi.Scale(92);
+    int label_y = y + dpi.Scale(4);
     int row2_y = 0;
+    int grid_top_y = 0;
     int status_label_w = 0;
     int sdata_label_w = 0;
-    int status_field_w = 84;
-    int sdata_field_w = 150;
+    int status_field_w = dpi.Scale(84);
+    int sdata_field_w = dpi.Scale(150);
 
-    mfc_tool::ui::SafeMoveWindow(group_, margin, margin, cx - margin * 2, (std::max)(250, cy - margin * 2 - 8));
-    group_.GetWindowRect(&group_rc);
-    ScreenToClient(&group_rc);
-    grid_bottom = group_rc.bottom - 12;
+    mfc_tool::ui::SafeMoveWindow(group_, r.left + margin, r.top + margin, r.Width() - margin * 2, group_h);
+    group_rc.SetRect(r.left + margin, r.top + margin, r.right - margin, r.top + margin + group_h);
+    grid_bottom = group_rc.bottom - dpi.Scale(12);
 
-    x = mfc_tool::ui::PlaceLabelAndControl(fixed_pin_title_, fixed_pin_value_, x, label_y, y + 4, 270, 20, gap) + 14;
-    x = mfc_tool::ui::PlaceLabelAndControl(slot_count_title_, slot_count_edit_, x, label_y, y, 50, row, gap) + 12;
-    x = mfc_tool::ui::PlaceLabelAndControl(clock_title_, clock_edit_, x, label_y, y, 70, row, gap) + 12;
-    mfc_tool::ui::SafeMoveWindow(periodic_check_, x, y + 2, 110, 22);
-    x += 110 + gap;
-    x = mfc_tool::ui::PlaceLabelAndControl(interval_title_, interval_edit_, x, label_y, y, 64, row, gap) + 12;
-    mfc_tool::ui::PlaceLabelAndControl(vendor_title_, vendor_edit_, x, label_y, y, 52, row, gap);
+    {
+        const int fixed_pin_w = (std::max)(dpi.Scale(360),
+                                           mfc_tool::ui::MeasureControlTextWidth(fixed_pin_value_, dpi.Scale(12)));
+        x = mfc_tool::ui::PlaceLabelAndControl(fixed_pin_title_,
+                                               fixed_pin_value_,
+                                               x,
+                                               label_y,
+                                               y + dpi.Scale(4),
+                                               fixed_pin_w,
+                                               metrics.row24,
+                                               gap,
+                                               dpi.Scale(8),
+                                               metrics.label18) + dpi.Scale(14);
+    }
+    x = mfc_tool::ui::PlaceLabelAndControl(slot_count_title_, slot_count_edit_, x, label_y, y, dpi.Scale(50), row, gap, dpi.Scale(8), metrics.label18) + dpi.Scale(12);
+    x = mfc_tool::ui::PlaceLabelAndControl(clock_title_, clock_edit_, x, label_y, y, dpi.Scale(70), row, gap, dpi.Scale(8), metrics.label18) + dpi.Scale(12);
+    mfc_tool::ui::SafeMoveWindow(periodic_check_, x, y + dpi.Scale(2), dpi.Scale(110), metrics.row24);
+    x += dpi.Scale(110) + gap;
+    x = mfc_tool::ui::PlaceLabelAndControl(interval_title_, interval_edit_, x, label_y, y, dpi.Scale(64), row, gap, dpi.Scale(8), metrics.label18) + dpi.Scale(12);
+    mfc_tool::ui::PlaceLabelAndControl(vendor_title_, vendor_edit_, x, label_y, y, dpi.Scale(52), row, gap, dpi.Scale(8), metrics.label18);
 
-    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(enable_btn_));
-    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(disable_btn_));
-    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(apply_btn_));
-    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(status_btn_));
+    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(enable_btn_, dpi.Scale(20)));
+    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(disable_btn_, dpi.Scale(20)));
+    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(apply_btn_, dpi.Scale(20)));
+    btn_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(status_btn_, dpi.Scale(20)));
     row2_y = y + row + gap;
     x = inner_left;
     mfc_tool::ui::SafeMoveWindow(enable_btn_, x, row2_y, btn_w, row);
@@ -276,38 +452,61 @@ void CSgpioTab::OnSize(UINT nType, int cx, int cy) {
     mfc_tool::ui::SafeMoveWindow(apply_btn_, x, row2_y, btn_w, row);
     x += btn_w + gap;
     mfc_tool::ui::SafeMoveWindow(status_btn_, x, row2_y, btn_w, row);
-    x += btn_w + 18;
-    x = mfc_tool::ui::PlaceLabelAndControl(slot_preset_title_, slot_index_combo_, x, row2_y + 4, row2_y, 58, 200, gap) + 12;
-    x = mfc_tool::ui::PlaceLabelAndControl(ibpi_preset_title_, ibpi_preset_combo_, x, row2_y + 4, row2_y, 112, 240, gap) + 12;
-    mfc_tool::ui::SafeMoveWindow(preset_apply_btn_, x, row2_y, (std::max)(96, mfc_tool::ui::MeasureButtonMinWidth(preset_apply_btn_)), row);
-    x += (std::max)(96, mfc_tool::ui::MeasureButtonMinWidth(preset_apply_btn_)) + gap;
-    mfc_tool::ui::SafeMoveWindow(clear_all_btn_, x, row2_y, (std::max)(88, mfc_tool::ui::MeasureButtonMinWidth(clear_all_btn_)), row);
-    status_label_w = mfc_tool::ui::MeasureControlTextWidth(status_title_, 8);
-    sdata_label_w = mfc_tool::ui::MeasureControlTextWidth(sdata_in_title_, 8);
+    x += btn_w + dpi.Scale(18);
+    x = mfc_tool::ui::PlaceLabelAndControl(slot_preset_title_, slot_index_combo_, x, row2_y + dpi.Scale(4), row2_y, dpi.Scale(58), dpi.Scale(200), gap, dpi.Scale(8), metrics.label18) + dpi.Scale(12);
+    x = mfc_tool::ui::PlaceLabelAndControl(ibpi_preset_title_, ibpi_preset_combo_, x, row2_y + dpi.Scale(4), row2_y, dpi.Scale(112), dpi.Scale(240), gap, dpi.Scale(8), metrics.label18) + dpi.Scale(12);
+    {
+        const int preset_w = (std::max)(dpi.Scale(96), mfc_tool::ui::MeasureButtonMinWidth(preset_apply_btn_, dpi.Scale(20)));
+        const int clear_w = (std::max)(dpi.Scale(88), mfc_tool::ui::MeasureButtonMinWidth(clear_all_btn_, dpi.Scale(20)));
+        mfc_tool::ui::SafeMoveWindow(preset_apply_btn_, x, row2_y, preset_w, row);
+        x += preset_w + gap;
+        mfc_tool::ui::SafeMoveWindow(clear_all_btn_, x, row2_y, clear_w, row);
+        x += clear_w;
+    }
+    status_label_w = mfc_tool::ui::MeasureControlTextWidth(status_title_, dpi.Scale(8));
+    sdata_label_w = mfc_tool::ui::MeasureControlTextWidth(sdata_in_title_, dpi.Scale(8));
+    grid_top_y = row2_y + row + gap + dpi.Scale(4);
     {
         const int sdata_x = right - (sdata_label_w + gap + sdata_field_w);
         const int status_x = sdata_x - gap - status_field_w - gap - status_label_w;
-        mfc_tool::ui::SafeMoveWindow(status_title_, status_x, row2_y + 4, status_label_w, 18);
-        mfc_tool::ui::SafeMoveWindow(status_value_, status_x + status_label_w + gap, row2_y + 4, status_field_w, 20);
-        mfc_tool::ui::SafeMoveWindow(sdata_in_title_, sdata_x, row2_y + 4, sdata_label_w, 18);
-        mfc_tool::ui::SafeMoveWindow(sdata_in_value_, sdata_x + sdata_label_w + gap, row2_y + 4, sdata_field_w, 20);
+        if (status_x >= x + dpi.Scale(12)) {
+            mfc_tool::ui::SafeMoveWindow(status_title_, status_x, row2_y + dpi.Scale(4), status_label_w, metrics.label18);
+            mfc_tool::ui::SafeMoveWindow(status_value_, status_x + status_label_w + gap, row2_y + dpi.Scale(4), status_field_w, metrics.row24);
+            mfc_tool::ui::SafeMoveWindow(sdata_in_title_, sdata_x, row2_y + dpi.Scale(4), sdata_label_w, metrics.label18);
+            mfc_tool::ui::SafeMoveWindow(sdata_in_value_, sdata_x + sdata_label_w + gap, row2_y + dpi.Scale(4), sdata_field_w, metrics.row24);
+        } else {
+            const int row3_y = row2_y + row + gap;
+            int sx = inner_left;
+            int status_value_w = right - sx - status_label_w - gap - sdata_label_w - gap - sdata_field_w - gap;
+            status_value_w = (std::max)(dpi.Scale(220), status_value_w);
+            mfc_tool::ui::SafeMoveWindow(status_title_, sx, row3_y + dpi.Scale(4), status_label_w, metrics.label18);
+            sx += status_label_w + gap;
+            mfc_tool::ui::SafeMoveWindow(status_value_, sx, row3_y + dpi.Scale(4), status_value_w, metrics.row24);
+            sx += status_value_w + gap;
+            mfc_tool::ui::SafeMoveWindow(sdata_in_title_, sx, row3_y + dpi.Scale(4), sdata_label_w, metrics.label18);
+            sx += sdata_label_w + gap;
+            mfc_tool::ui::SafeMoveWindow(sdata_in_value_, sx, row3_y + dpi.Scale(4), sdata_field_w, metrics.row24);
+            grid_top_y = row3_y + row + gap + dpi.Scale(4);
+        }
     }
 
-    y = row2_y + row + gap + 4;
-    LayoutSlotGrid(inner_left, y, right, grid_bottom);
+    LayoutSlotGrid(inner_left, grid_top_y, right, grid_bottom);
 }
 
 void CSgpioTab::LayoutSlotGrid(int left, int top, int right, int bottom) {
-    const int gap = 6;
-    const int min_row = 16;
+    const mfc_tool::ui::DpiScaler dpi = mfc_tool::ui::DpiScaler::FromWindow(*this);
+    const mfc_tool::ui::LayoutMetrics metrics = mfc_tool::ui::MetricsForWindow(*this);
+    const int gap = metrics.gap;
+    const int min_row = dpi.Scale(18);
     const int rows_per_col = kSgpioSlotMax / 2;
-    const int header_h = 16;
-    const int col1_w = 44;
-    const int col_w = 64;
-    const int block_w = col1_w + gap + col_w + gap + col_w + gap + col_w + 12;
+    const int header_h = dpi.Scale(16);
+    const int check_size = dpi.Scale(16);
+    const int col1_w = dpi.Scale(44);
+    const int col_w = dpi.Scale(64);
+    const int block_w = col1_w + gap + col_w + gap + col_w + gap + col_w + dpi.Scale(12);
     const int avail_w = (std::max)(0, right - left);
     const int remain_w = (std::max)(0, avail_w - block_w * 2);
-    int gap_each = 18;
+    int gap_each = dpi.Scale(18);
     int row_step = 0;
     int row_base_y = 0;
     int first_col_x = 0;
@@ -315,7 +514,7 @@ void CSgpioTab::LayoutSlotGrid(int left, int top, int right, int bottom) {
     int i = 0;
 
     if (block_w * 2 + gap_each > avail_w) {
-        gap_each = (std::max)(8, remain_w);
+        gap_each = (std::max)(gap, remain_w);
     }
     first_col_x = left;
     second_col_x = first_col_x + block_w + gap_each;
@@ -324,15 +523,15 @@ void CSgpioTab::LayoutSlotGrid(int left, int top, int right, int bottom) {
         first_col_x = (std::max)(left, second_col_x - gap_each - block_w);
     }
 
-    row_base_y = top + header_h + 3;
-    row_step = (bottom - row_base_y - 4) / rows_per_col;
+    row_base_y = top + header_h + dpi.Scale(3);
+    row_step = (bottom - row_base_y - dpi.Scale(4)) / rows_per_col;
     row_step = (std::max)(min_row, row_step);
-    row_step = (std::min)(17, row_step);
+    row_step = (std::min)(dpi.Scale(24), row_step);
 
-    mfc_tool::ui::SafeMoveWindow(slot_hdr_, first_col_x, top, col1_w, 16);
-    mfc_tool::ui::SafeMoveWindow(act_hdr_, first_col_x + col1_w + gap + 10, top, 32, 16);
-    mfc_tool::ui::SafeMoveWindow(locate_hdr_, first_col_x + col1_w + gap + col_w + gap + 4, top, 46, 16);
-    mfc_tool::ui::SafeMoveWindow(fail_hdr_, first_col_x + col1_w + gap + col_w + gap + col_w + gap + 10, top, 32, 16);
+    mfc_tool::ui::SafeMoveWindow(slot_hdr_, first_col_x, top, col1_w, header_h);
+    mfc_tool::ui::SafeMoveWindow(act_hdr_, first_col_x + col1_w + gap, top, col_w, header_h);
+    mfc_tool::ui::SafeMoveWindow(locate_hdr_, first_col_x + col1_w + gap + col_w + gap, top, col_w, header_h);
+    mfc_tool::ui::SafeMoveWindow(fail_hdr_, first_col_x + col1_w + gap + col_w + gap + col_w + gap, top, col_w, header_h);
     for (i = 0; i < kSgpioSlotMax; ++i) {
         const bool left_block = i < 8;
         const int local_index = left_block ? i : (i - 8);
@@ -342,10 +541,10 @@ void CSgpioTab::LayoutSlotGrid(int left, int top, int right, int bottom) {
         const int locate_x = act_x + col_w + gap;
         const int fail_x = locate_x + col_w + gap;
         const bool active_slot = i < EffectiveSlotCount();
-        mfc_tool::ui::SafeMoveWindow(slot_labels_[i], base_x, row_y + 1, col1_w, 16);
-        mfc_tool::ui::SafeMoveWindow(act_checks_[i], act_x + 18, row_y, 16, 16);
-        mfc_tool::ui::SafeMoveWindow(locate_checks_[i], locate_x + 18, row_y, 16, 16);
-        mfc_tool::ui::SafeMoveWindow(fail_checks_[i], fail_x + 18, row_y, 16, 16);
+        mfc_tool::ui::SafeMoveWindow(slot_labels_[i], base_x, row_y + dpi.Scale(1), col1_w, metrics.label18);
+        mfc_tool::ui::SafeMoveWindow(act_checks_[i], act_x + (col_w - check_size) / 2, row_y, check_size, check_size);
+        mfc_tool::ui::SafeMoveWindow(locate_checks_[i], locate_x + (col_w - check_size) / 2, row_y, check_size, check_size);
+        mfc_tool::ui::SafeMoveWindow(fail_checks_[i], fail_x + (col_w - check_size) / 2, row_y, check_size, check_size);
         mfc_tool::ui::SafeEnableWindow(slot_labels_[i], active_slot ? TRUE : FALSE);
         mfc_tool::ui::SafeEnableWindow(act_checks_[i], (connected_ && active_slot) ? TRUE : FALSE);
         mfc_tool::ui::SafeEnableWindow(locate_checks_[i], (connected_ && active_slot) ? TRUE : FALSE);
@@ -723,8 +922,6 @@ void CSgpioTab::OnBtnClearAll() {
 void CSgpioTab::OnSlotCountChanged() {
     UpdateEnableState();
     if (::IsWindow(GetSafeHwnd())) {
-        CRect rc;
-        GetClientRect(&rc);
-        OnSize(0, rc.Width(), rc.Height());
+        LayoutScrolledContent();
     }
 }

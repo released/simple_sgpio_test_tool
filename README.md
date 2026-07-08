@@ -273,7 +273,7 @@ This repository intentionally keeps `build\SgpioHidTool.exe`, `build\sgpio_hid_t
 
 - `src\` - MFC app, HID transport, SGPIO tab, app state, logging, and config helpers.
 - `scripts\` - MFC build, clean, release, and version helper scripts.
-- `docs\` - SGPIO bridge protocol notes.
+- `docs\` - SGPIO bridge protocol notes and MFC DPI scaling guide.
 - `demo_code\` - M032 EVB HID bridge firmware project.
 - `build\` - generated PC build output and local runtime files.
 - `SELF_CHECK.md` - latest verification record.

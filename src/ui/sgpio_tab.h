@@ -19,6 +19,7 @@ public:
               mfc_tool::core::PinUsageRegistry* pin_usage);
     void SetConnected(bool connected);
     void OnDisconnected();
+    void RefreshDpiLayout();
 
     void LoadState(const mfc_tool::core::AppState& state);
     void SaveState(mfc_tool::core::AppState* state) const;
@@ -26,6 +27,8 @@ public:
 protected:
     afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
     afx_msg void OnSize(UINT nType, int cx, int cy);
+    afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
+    afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
     afx_msg void OnBtnEnable();
     afx_msg void OnBtnDisable();
     afx_msg void OnBtnApplyNow();
@@ -37,6 +40,11 @@ protected:
 
 private:
     void UpdateEnableState();
+    int CalculateVirtualContentHeight(const CRect& client) const;
+    void UpdateVerticalScroll(const CRect& client);
+    void ScrollToOffset(int next_offset);
+    void LayoutScrolledContent();
+    void LayoutControls(const CRect& r);
     void LayoutSlotGrid(int left, int top, int right, int bottom);
     int ParseEditInt(const CEdit& edit) const;
     std::wstring GetEditText(const CEdit& edit) const;
@@ -61,6 +69,8 @@ private:
     std::function<void(const std::wstring&)> log_;
     bool connected_ = false;
     bool enabled_ = false;
+    int scroll_offset_ = 0;
+    int virtual_content_height_ = 0;
 
     CFont ui_font_;
     CFont slot_font_;
