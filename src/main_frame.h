@@ -30,6 +30,7 @@ protected:
     afx_msg void OnBnClickedGetInfo();
     afx_msg void OnBnClickedPing();
     afx_msg void OnBnClickedResetMcu();
+    afx_msg void OnBnClickedReturnBootloader();
     afx_msg void OnBnClickedSaveIni();
     afx_msg void OnBnClickedLoadIni();
     afx_msg void OnBnClickedResetIni();
@@ -101,6 +102,7 @@ private:
     CButton get_info_btn_;
     CButton ping_btn_;
     CButton reset_mcu_btn_;
+    CButton return_bootloader_btn_;
 
     CTabCtrl tab_ctrl_;
     CSgpioTab sgpio_tab_;

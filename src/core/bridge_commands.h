@@ -13,6 +13,7 @@ constexpr uint8_t kBridgeMaxPayload = kBridgeReportSize - kBridgeHeaderSize;
 constexpr uint8_t CMD_PING = 0x01;
 constexpr uint8_t CMD_GET_INFO = 0x02;
 constexpr uint8_t CMD_RESET_MCU = 0x03;
+constexpr uint8_t CMD_ENTER_IAP = 0x04;
 
 constexpr uint8_t CMD_SGPIO_CONFIG = 0x74;
 constexpr uint8_t CMD_SGPIO_APPLY = 0x75;

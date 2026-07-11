@@ -23,6 +23,7 @@ public:
     std::vector<std::uint8_t> Ping(const std::vector<std::uint8_t>& data);
     std::vector<std::uint8_t> GetInfo();
     std::vector<std::uint8_t> ResetMcu();
+    std::vector<std::uint8_t> EnterIap();
 
     std::vector<std::uint8_t> SgpioConfig(int slot_count, int clock_hz);
     std::vector<std::uint8_t> SgpioApply(bool enable, bool periodic, int interval_ms, int sload_raw,

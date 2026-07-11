@@ -1,15 +1,15 @@
-# M032 SGPIO HID Tool
+# SGPIO HID Tool
 
-Windows MFC GUI tool and M032/M031 USB HID firmware for using an M032 EVB as an SGPIO host bridge board.
+Windows MFC GUI tool and M032/M261 USB HID firmware for using an EVB as an SGPIO host bridge board.
 
-The PC GUI connects to the M032 EVB over USB HID, then asks the bridge firmware to output SGPIO frames on fixed GPIO pins. The main use case is validating external SGPIO target/device firmware such as:
+The PC GUI connects to the bridge EVB over USB HID, then asks the bridge firmware to output SGPIO frames on fixed GPIO pins. The main use case is validating external SGPIO target/device firmware such as:
 
 - `M031BSP_Software_SGPIO`
 - `M031BSP_SPI_SGPIO`
 
 ## Current Scope
 
-- Bridge board: M032 EVB or compatible M031/M032 board running the firmware in this workspace.
+- Bridge board: M032 EVB or M261 EVB running the firmware in this workspace.
 - PC transport: Windows HID class driver, 64-byte HID reports.
 - SGPIO role: host/initiator output for `SCLOCK/SCLK`, `SDATA OUT`, and `SLOAD`.
 - Target validation: 8-slot and 16-slot SGPIO receive/decode testing.
@@ -22,13 +22,13 @@ The PC GUI connects to the M032 EVB over USB HID, then asks the bridge firmware 
 
 ## Quick Start
 
-1. Build and flash the M032 EVB firmware from this workspace.
-2. Connect the M032 EVB USB port to the PC.
-3. Wire M032 `PA2/PA0/PA3/GND` to the target SGPIO `SCLK/SDATA OUT/SLOAD/GND`.
+1. Build and flash the M032 or M261 EVB firmware from this workspace.
+2. Connect the bridge EVB USB port to the PC.
+3. Wire bridge `PA2/PA0/PA3/GND` to the target SGPIO `SCLK/SDATA OUT/SLOAD/GND`.
 4. Build or launch the PC tool at `build\SgpioHidTool.exe`.
 5. In the GUI, keep VID `0x0416` and PID `0x5020`, then click `Refresh`.
 6. Select the bridge device or keep `Auto Select`, then click `Connect`.
-7. Click `Get Info`; the firmware should report `m032-sgpio-bridge/1.0.0`.
+7. Click `Get Info`; the firmware should report `m032-sgpio-bridge/1.0.0` or `m261-sgpio-bridge/1.0.0`.
 8. In the `SGPIO` tab, choose slot count, clock, interval, SLOAD raw bits, and slot ACT/LOCATE/FAIL checkboxes.
 9. Click `Enable` to start SGPIO output.
 10. Verify the target UART log and logic analyzer decode.
@@ -36,9 +36,9 @@ The PC GUI connects to the M032 EVB over USB HID, then asks the bridge firmware 
 
 ## Hardware Wiring
 
-M032 EVB host bridge to SGPIO target:
+EVB host bridge to SGPIO target:
 
-| M032 EVB pin | Bridge direction | SGPIO signal | Target side |
+| Bridge EVB pin | Bridge direction | SGPIO signal | Target side |
 | --- | --- | --- | --- |
 | `PA2` | Output | `SCLK` / `SCLOCK` | Target clock input |
 | `PA0` | Output | `SDATA OUT` | Target data input |
@@ -46,7 +46,7 @@ M032 EVB host bridge to SGPIO target:
 | `GND` | Ground | Ground | Target ground |
 | `PA1` | Input | `SDATA IN` optional | Target data output, if available |
 
-The bundled bridge firmware uses fixed pins. The GUI does not expose alternate SGPIO pin mux choices.
+The bundled M032 and M261 bridge firmware uses fixed pins. The GUI does not expose alternate SGPIO pin mux choices.
 
 For the referenced `M031BSP_Software_SGPIO` target, the default target receive wiring is also `PA2=SCLK`, `PA0=SDATA OUT`, and `PA3=SLOAD`. Its debug UART is typically `UART0` at `115200 8N1`.
 
@@ -94,22 +94,42 @@ It intentionally preserves:
 
 ## Build And Flash Firmware
 
-The M032 EVB must be flashed with this workspace HID bridge firmware before the GUI can control SGPIO. The PC GUI alone is not enough; without this firmware, the GUI will not see the expected HID bridge protocol.
+The EVB must be flashed with this workspace HID bridge firmware before the GUI can control SGPIO. The PC GUI alone is not enough; without this firmware, the GUI will not see the expected HID bridge protocol.
 
-Keil project:
+Keil projects:
 
-- `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\Keil\Template.uvprojx`
+- M031/M032 HID IAP bootloader: `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\ISP_HID\Keil\ISP_HID.uvprojx`
+- M031/M032 SGPIO bridge application: `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\Keil\Template.uvprojx`
+- M261 HID IAP bootloader: `demo_code\M261BSP_USB_HID_SGPIO\SampleCode\ISP_HID\Keil\ISP_HID.uvprojx`
+- M261 SGPIO bridge application: `demo_code\M261BSP_USB_HID_SGPIO\SampleCode\Template\Keil\Template.uvprojx`
+
+M031/M032 IAP layout:
+
+- Bootloader: `0x00000000..0x00003FFF` (`16 KB`)
+- SGPIO bridge application: `0x00004000..0x0001FFFF` (`112 KB`)
+- App CRC word: `0x0001FFFC`
+- Bootloader USB HID PID: `0x3F00`
+- Application USB HID PID: `0x5020`
+
+M261/M263KIAAE IAP layout:
+
+- Bootloader: `0x00000000..0x0000FFFF` (`64 KB`)
+- SGPIO bridge application: `0x00010000..0x0007FFFF` (`448 KB`)
+- App CRC word: `0x0007FFFC`
+- Bootloader USB HID PID: `0x3F00`
+- Application USB HID PID: `0x5020`
 
 Typical flow:
 
-1. Open `Template.uvprojx` in Keil uVision.
-2. Select the normal application target.
-3. Build the firmware.
-4. Flash/download the generated image to the M032 EVB through Nu-Link or the board's configured debug adapter.
-5. Reset or power-cycle the EVB.
-6. Confirm Windows enumerates the HID device.
-7. Launch `build\SgpioHidTool.exe`.
-8. Click `Refresh`, `Connect`, `Ping`, and `Get Info`.
+1. Build and flash `ISP_HID.uvprojx` first when preparing a board for HID app update.
+2. Build `Template.uvprojx`; its post-build step generates a padded app image with CRC at `SampleCode\Template\Keil\obj\template.bin`.
+3. Use `simple_programming_tool` to program that padded app image while the board is in HID ISP bootloader mode.
+4. Reset or power-cycle the EVB.
+5. Confirm Windows enumerates the application HID device.
+6. Launch `build\SgpioHidTool.exe`.
+7. Click `Refresh`, `Connect`, `Ping`, and `Get Info`.
+
+The top-level GUI includes `Return Bootloader`. It sends `BRIDGE_CMD_ENTER_IAP` (`0x04`) to the running bridge application, erases only the application CRC word, disconnects from the app HID device, and resets through the bootloader path. After the bootloader enumerates as `VID 0x0416`, `PID 0x3F00`, use `simple_programming_tool` to program a valid padded bridge application image. This button is an app-side bridge self-update entry point; it is not a target-board programming flow.
 
 Default USB identity:
 
@@ -119,15 +139,24 @@ Default USB identity:
 Expected firmware info:
 
 - `m032-sgpio-bridge/1.0.0`
+- `m261-sgpio-bridge/1.0.0`
 
 Important firmware files:
 
+- `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\ISP_HID\` - USB HID IAP bootloader.
+- `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\iap_mailbox.h` - shared app-to-bootloader mailbox definition.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\m031_bridge_sgpio.c` - Timer0 + PDMA SGPIO waveform generator.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\m031_bridge_sgpio.h` - SGPIO limits and bridge API.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\hid_tool_api.c` - HID command dispatcher.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\bridge_protocol.h` - HID command IDs and status codes.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\bridge_version.h` - firmware version string.
 - `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\hid_transfer.h` - USB VID/PID and HID settings.
+- `demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\Keil\generateChecksum.bat` - SRecord post-build padding and CRC generation.
+- `demo_code\M261BSP_USB_HID_SGPIO\SampleCode\ISP_HID\` - M261 USB HID IAP bootloader.
+- `demo_code\M261BSP_USB_HID_SGPIO\SampleCode\Template\m261_bridge_sgpio.c` - M261 Timer0 + PDMA SGPIO waveform generator.
+- `demo_code\M261BSP_USB_HID_SGPIO\SampleCode\Template\Keil\Template.uvprojx` - M261 application project with checksum post-build.
+
+M261 support is source-level aligned with the M032 SGPIO behavior and uses the same fixed SGPIO pins. Hardware validation on an M261 EVB still needs to be run before treating it as production-verified.
 
 ## SGPIO Signal Behavior
 

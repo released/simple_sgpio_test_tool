@@ -51,6 +51,10 @@ std::vector<std::uint8_t> BridgeService::ResetMcu() {
     return Tx(CMD_RESET_MCU, {});
 }
 
+std::vector<std::uint8_t> BridgeService::EnterIap() {
+    return Tx(CMD_ENTER_IAP, {});
+}
+
 std::vector<std::uint8_t> BridgeService::SgpioConfig(int slot_count, int clock_hz) {
     std::vector<std::uint8_t> p;
     p.push_back(static_cast<std::uint8_t>(std::clamp(slot_count, 1, 16)));

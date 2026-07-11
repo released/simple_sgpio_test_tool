@@ -40,6 +40,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
     ON_BN_CLICKED(ID_TOP_GET_INFO_BTN, &CMainFrame::OnBnClickedGetInfo)
     ON_BN_CLICKED(ID_TOP_PING_BTN, &CMainFrame::OnBnClickedPing)
     ON_BN_CLICKED(ID_TOP_RESET_MCU_BTN, &CMainFrame::OnBnClickedResetMcu)
+    ON_BN_CLICKED(ID_TOP_RETURN_BOOTLOADER_BTN, &CMainFrame::OnBnClickedReturnBootloader)
     ON_BN_CLICKED(ID_TOP_SAVE_INI_BTN, &CMainFrame::OnBnClickedSaveIni)
     ON_BN_CLICKED(ID_TOP_LOAD_INI_BTN, &CMainFrame::OnBnClickedLoadIni)
     ON_BN_CLICKED(ID_TOP_RESET_INI_BTN, &CMainFrame::OnBnClickedResetIni)
@@ -114,6 +115,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
     if (!create_or_fail(get_info_btn_.Create(L"Get Info", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, CRect(), this, ID_TOP_GET_INFO_BTN), L"Get Info")) return -1;
     if (!create_or_fail(ping_btn_.Create(L"Ping", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, CRect(), this, ID_TOP_PING_BTN), L"Ping")) return -1;
     if (!create_or_fail(reset_mcu_btn_.Create(L"Reset MCU", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, CRect(), this, ID_TOP_RESET_MCU_BTN), L"Reset MCU")) return -1;
+    if (!create_or_fail(return_bootloader_btn_.Create(L"Return Bootloader", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, CRect(), this, ID_TOP_RETURN_BOOTLOADER_BTN), L"Return Bootloader")) return -1;
     if (!create_or_fail(tab_ctrl_.Create(WS_CHILD | WS_VISIBLE | WS_TABSTOP | TCS_FIXEDWIDTH, CRect(), this, ID_TAB_CTRL), L"Tab ctrl")) return -1;
     if (!create_or_fail(save_log_check_.Create(L"Save Log", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, CRect(), this, ID_LOG_SAVE_CHECK), L"Save Log checkbox")) return -1;
     if (!create_or_fail(save_log_btn_.Create(L"Save Log", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, CRect(), this, ID_LOG_SAVE_BTN), L"Save Log button")) return -1;
@@ -251,8 +253,9 @@ void CMainFrame::LayoutControls(int cx, int cy) {
     x = margin;
     x += mfc_tool::ui::PlaceLabel(device_label_, x, y + label_y_pad, label_pad, label_h) + gap;
     {
-        const int reset_w = btn_w + dpi.Scale(8);
-        const int action_w = btn_w * 2 + reset_w + gap * 2;
+        const int reset_w = (std::max)(btn_w + dpi.Scale(8), mfc_tool::ui::MeasureButtonMinWidth(reset_mcu_btn_, dpi.Scale(20)));
+        const int return_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(return_bootloader_btn_, dpi.Scale(20)));
+        const int action_w = btn_w * 2 + reset_w + return_w + gap * 3;
         const int combo_w = (std::max)(dpi.Scale(260), cx - x - action_w - margin - gap);
         mfc_tool::ui::SafeMoveWindow(device_combo_, x, y, combo_w, row_h + metrics.comboDrop);
         x += combo_w + gap;
@@ -261,7 +264,13 @@ void CMainFrame::LayoutControls(int cx, int cy) {
     x += btn_w + gap;
     mfc_tool::ui::SafeMoveWindow(ping_btn_, x, y, btn_w, row_h);
     x += btn_w + gap;
-    mfc_tool::ui::SafeMoveWindow(reset_mcu_btn_, x, y, btn_w + dpi.Scale(8), row_h);
+    {
+        const int reset_w = (std::max)(btn_w + dpi.Scale(8), mfc_tool::ui::MeasureButtonMinWidth(reset_mcu_btn_, dpi.Scale(20)));
+        const int return_w = (std::max)(btn_w, mfc_tool::ui::MeasureButtonMinWidth(return_bootloader_btn_, dpi.Scale(20)));
+        mfc_tool::ui::SafeMoveWindow(reset_mcu_btn_, x, y, reset_w, row_h);
+        x += reset_w + gap;
+        mfc_tool::ui::SafeMoveWindow(return_bootloader_btn_, x, y, return_w, row_h);
+    }
 
     y += row_h + gap;
     x = margin;
@@ -309,13 +318,13 @@ void CMainFrame::ApplyTopControlFont() {
         return;
     }
 
-    const std::array<CWnd*, 30> controls = {
+    const std::array<CWnd*, 31> controls = {
         &vid_label_, &vid_edit_, &pid_label_, &pid_edit_, &timeout_label_, &timeout_edit_,
         &refresh_btn_, &connect_btn_, &disconnect_btn_, &status_title_, &status_chip_, &save_ini_btn_,
         &load_ini_btn_, &reset_ini_btn_, &ini_path_title_, &ini_path_value_, &build_info_title_,
         &build_info_value_, &fw_info_title_, &fw_info_value_, &device_label_, &device_combo_,
-        &get_info_btn_, &ping_btn_, &reset_mcu_btn_, &tab_ctrl_, &save_log_check_, &save_log_btn_,
-        &clear_log_btn_, &log_edit_
+        &get_info_btn_, &ping_btn_, &reset_mcu_btn_, &return_bootloader_btn_, &tab_ctrl_,
+        &save_log_check_, &save_log_btn_, &clear_log_btn_, &log_edit_
     };
 
     for (CWnd* w : controls) {
@@ -398,6 +407,7 @@ void CMainFrame::SetConnectionUi(bool connected) {
     mfc_tool::ui::SafeEnableWindow(connect_btn_, !connected);
     mfc_tool::ui::SafeEnableWindow(disconnect_btn_, connected);
     mfc_tool::ui::SafeEnableWindow(reset_mcu_btn_, connected);
+    mfc_tool::ui::SafeEnableWindow(return_bootloader_btn_, connected);
     mfc_tool::ui::SafeEnableWindow(device_combo_, !connected);
     mfc_tool::ui::SafeEnableWindow(refresh_btn_, !connected);
     mfc_tool::ui::SafeEnableWindow(save_log_btn_, save_log_check_.GetCheck() == BST_CHECKED);
@@ -679,6 +689,28 @@ void CMainFrame::OnBnClickedResetMcu() {
         RefreshDevices();
     } catch (const std::exception& e) {
         ShowErrorBox(L"Reset MCU Error", AnsiToWide(e.what()));
+    }
+}
+
+void CMainFrame::OnBnClickedReturnBootloader() {
+    const int answer = MessageBoxW(
+        L"Return the bridge board to USB HID bootloader mode?\r\n\r\n"
+        L"This erases the application CRC word. If programming is canceled, the board will stay in bootloader mode until a valid application image is programmed.",
+        L"Return Bootloader",
+        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2);
+    if (answer != IDYES) {
+        return;
+    }
+
+    try {
+        service_.EnterIap();
+        AppendLog(L"Return Bootloader command sent; application CRC invalidated.");
+        AppendLog(L"Use simple_programming_tool after bootloader VID:PID 0416:3F00 enumerates.");
+        sgpio_tab_.OnDisconnected();
+        service_.Disconnect();
+        SetConnectionUi(false);
+    } catch (const std::exception& e) {
+        ShowErrorBox(L"Return Bootloader Error", AnsiToWide(e.what()));
     }
 }
 

@@ -11,12 +11,14 @@
 #include "bridge_version.h"
 #include "hid_transfer.h"
 #include "hid_tool_api.h"
+#include "../ISP_HID/iap_layout.h"
 #include "m031_bridge_sgpio.h"
 #include "misc_config.h"
 
 #define BRIDGE_INFO_NAME             "m032-sgpio-bridge/" M032_BRIDGE_FW_VERSION_STR
 #define BRIDGE_RESET_REASON_NONE     0u
 #define BRIDGE_RESET_REASON_CMD      2u
+#define BRIDGE_RESET_REASON_ENTER_IAP 3u
 #define BRIDGE_RESET_DELAY_LOOPS     20000u
 
 static volatile uint8_t g_u8CmdProcessReady = 0u;
@@ -27,6 +29,25 @@ static uint8_t g_u8LastResetReason = BRIDGE_RESET_REASON_NONE;
 
 static uint8_t hid_buffer_to_pc[EP2_MAX_PKT_SIZE] = {0};
 static uint8_t hid_buffer_from_pc[EP3_MAX_PKT_SIZE] = {0};
+
+static uint8_t Bridge_InvalidateApplicationChecksum(void)
+{
+    int32_t i32Ret;
+
+    SYS_UnlockReg();
+    CLK->AHBCLK |= CLK_AHBCLK_ISPCKEN_Msk;
+    FMC_Open();
+    FMC_ENABLE_AP_UPDATE();
+    i32Ret = FMC_Erase(APROM_APPLICATION_CRC_ADDR);
+    FMC_DISABLE_AP_UPDATE();
+
+    if (i32Ret == 0)
+    {
+        return 1u;
+    }
+
+    return 0u;
+}
 
 static void Bridge_BuildResponseHeader(uint8_t *resp, uint8_t cmd, uint8_t seq, uint8_t status, uint16_t payload_len)
 {
@@ -105,6 +126,25 @@ static uint8_t Bridge_HandleCore(uint8_t cmd, const uint8_t *payload, uint16_t p
                 return 1u;
             }
             g_u8LastResetReason = BRIDGE_RESET_REASON_CMD;
+            g_u8ResetRequested = 1u;
+            *out_len = 0u;
+            *status = BRIDGE_STATUS_OK;
+            return 1u;
+
+        case BRIDGE_CMD_ENTER_IAP:
+            if (payload_len != 0u)
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            if (Bridge_InvalidateApplicationChecksum() == 0u)
+            {
+                *status = BRIDGE_STATUS_IO_ERROR;
+                *out_len = 0u;
+                return 1u;
+            }
+            g_u8LastResetReason = BRIDGE_RESET_REASON_ENTER_IAP;
             g_u8ResetRequested = 1u;
             *out_len = 0u;
             *status = BRIDGE_STATUS_OK;
@@ -429,6 +469,16 @@ void HidTool_Process(void)
         if (g_u32ResetCountdown == 0u)
         {
             SYS_UnlockReg();
+            if (g_u8LastResetReason == BRIDGE_RESET_REASON_ENTER_IAP)
+            {
+                CLK->AHBCLK |= CLK_AHBCLK_ISPCKEN_Msk;
+                FMC->ISPCTL |= FMC_ISPCTL_ISPEN_Msk;
+                FMC_SetVectorPageAddr(0UL);
+                __set_PRIMASK(1);
+                SYS->IPRST0 = SYS_IPRST0_CPURST_Msk;
+
+                while (1);
+            }
             SYS_ResetChip();
         }
     }
