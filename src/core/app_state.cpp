@@ -89,6 +89,11 @@ config::IniData AppState::ToIniData(const std::wstring& ini_path) const {
         {L"fail_mask", sgpio.fail_mask}
     };
 
+    out[L"SGPIO_MONITOR"] = {
+        {L"expected_slot_count", sgpio_monitor.expected_slot_count},
+        {L"trigger_timeout_ms", sgpio_monitor.trigger_timeout_ms}
+    };
+
     return out;
 }
 
@@ -108,6 +113,11 @@ void AppState::ApplyIniData(const config::IniData& data) {
     sgpio.act_mask = GetValue(data, L"SGPIO", L"act_mask", sgpio.act_mask);
     sgpio.locate_mask = GetValue(data, L"SGPIO", L"locate_mask", sgpio.locate_mask);
     sgpio.fail_mask = GetValue(data, L"SGPIO", L"fail_mask", sgpio.fail_mask);
+
+    sgpio_monitor.expected_slot_count = GetValue(data, L"SGPIO_MONITOR", L"expected_slot_count",
+                                                  sgpio_monitor.expected_slot_count);
+    sgpio_monitor.trigger_timeout_ms = GetValue(data, L"SGPIO_MONITOR", L"trigger_timeout_ms",
+                                                 sgpio_monitor.trigger_timeout_ms);
 }
 
 } // namespace mfc_tool::core

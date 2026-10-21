@@ -47,6 +47,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
     ON_BN_CLICKED(ID_LOG_SAVE_BTN, &CMainFrame::OnBnClickedSaveLog)
     ON_BN_CLICKED(ID_LOG_SAVE_CHECK, &CMainFrame::OnBnClickedSaveLogCheck)
     ON_BN_CLICKED(ID_LOG_CLEAR_BTN, &CMainFrame::OnBnClickedClearLog)
+    ON_NOTIFY(TCN_SELCHANGE, ID_TAB_CTRL, &CMainFrame::OnTabSelChange)
     ON_WM_CTLCOLOR()
     ON_WM_CLOSE()
 END_MESSAGE_MAP()
@@ -127,16 +128,20 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
     CRect tab_dummy(0, 0, 100, 100);
     if (!sgpio_tab_.Create(&tab_ctrl_, tab_dummy, ID_TAB_SGPIO)) return -1;
     sgpio_tab_.Bind(&service_, [this](const std::wstring& msg) { AppendLog(msg); }, &pin_usage_);
+    if (!sgpio_monitor_tab_.Create(&tab_ctrl_, tab_dummy, ID_TAB_SGPIO_MONITOR)) return -1;
+    sgpio_monitor_tab_.Bind(&service_, [this](const std::wstring& msg) { AppendLog(msg); }, &pin_usage_);
 
     ApplyTopControlFont();
 
     tab_ctrl_.DeleteAllItems();
-    tab_ctrl_.InsertItem(0, L"SGPIO");
+    tab_ctrl_.InsertItem(0, L"SGPIO Output");
+    tab_ctrl_.InsertItem(1, L"SGPIO Monitor");
     {
         const mfc_tool::ui::DpiScaler dpi(current_dpi_);
-        tab_ctrl_.SetItemSize(dpi.ScaleSize(96, 24));
+        tab_ctrl_.SetItemSize(dpi.ScaleSize(128, 24));
     }
     tab_ctrl_.SetCurSel(0);
+    ShowSelectedTab();
 
     vid_edit_.SetWindowTextW(state_.ui.vid.c_str());
     pid_edit_.SetWindowTextW(state_.ui.pid.c_str());
@@ -149,6 +154,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
     AppendLog(L"M032 SGPIO HID tool initialized.");
     AppendLog(L"M032 EVB SGPIO host pins: PA2=SCLK, PA0=SDOUT, PA3=SLOAD, PA1=SDIN optional.");
+    AppendLog(L"M032 EVB SGPIO monitor pins: PA6=SCLOCK, PA4=SDATA, PA5=SLOAD.");
     UpdateIniPathUi();
     SetControlText(build_info_value_, std::wstring(L"v") + SGPIO_TOOL_BUILD_VERSION + L" | " + SGPIO_TOOL_BUILD_TIME);
     UpdateFirmwareInfoUi();
@@ -185,9 +191,10 @@ LRESULT CMainFrame::OnDpiChanged(WPARAM wParam, LPARAM lParam) {
     ApplyTopControlFont();
     {
         const mfc_tool::ui::DpiScaler dpi(current_dpi_);
-        tab_ctrl_.SetItemSize(dpi.ScaleSize(96, 24));
+        tab_ctrl_.SetItemSize(dpi.ScaleSize(128, 24));
     }
     sgpio_tab_.RefreshDpiLayout();
+    sgpio_monitor_tab_.RefreshDpiLayout();
 
     CRect rc;
     GetClientRect(&rc);
@@ -306,7 +313,17 @@ void CMainFrame::LayoutControls(int cx, int cy) {
     tab_ctrl_.AdjustRect(FALSE, &rc);
     rc.DeflateRect(dpi.Scale(4), dpi.Scale(4), dpi.Scale(4), dpi.Scale(4));
     mfc_tool::ui::SafeMoveWindow(sgpio_tab_, rc);
-    sgpio_tab_.ShowWindow(SW_SHOW);
+    mfc_tool::ui::SafeMoveWindow(sgpio_monitor_tab_, rc);
+    ShowSelectedTab();
+}
+
+void CMainFrame::ShowSelectedTab() {
+    if (!::IsWindow(tab_ctrl_.GetSafeHwnd())) {
+        return;
+    }
+    const int selected = tab_ctrl_.GetCurSel();
+    sgpio_tab_.ShowWindow(selected == 0 ? SW_SHOW : SW_HIDE);
+    sgpio_monitor_tab_.ShowWindow(selected == 1 ? SW_SHOW : SW_HIDE);
 }
 
 void CMainFrame::RecreateUiFont() {
@@ -415,6 +432,7 @@ void CMainFrame::SetConnectionUi(bool connected) {
     status_chip_color_ = connected ? RGB(46, 139, 87) : RGB(95, 104, 117);
     UpdateStatusChipColor();
     sgpio_tab_.SetConnected(connected);
+    sgpio_monitor_tab_.SetConnected(connected);
 }
 
 void CMainFrame::UpdateStatusChipColor() {
@@ -533,6 +551,7 @@ void CMainFrame::LoadIni() {
     timeout_edit_.SetWindowTextW(state_.ui.timeout_ms.c_str());
     save_log_check_.SetCheck(state_.ui.save_log_checked ? BST_CHECKED : BST_UNCHECKED);
     sgpio_tab_.LoadState(state_);
+    sgpio_monitor_tab_.LoadState(state_);
     current_fw_version_ = state_.ui.last_seen_fw_version.empty() ? L"-" : state_.ui.last_seen_fw_version;
     fw_version_match_ = FirmwareVersionMatch(expected_fw_version_, current_fw_version_) || current_fw_version_ == L"-";
     UpdateFirmwareInfoUi();
@@ -541,6 +560,7 @@ void CMainFrame::LoadIni() {
 
 void CMainFrame::SaveIni() {
     sgpio_tab_.SaveState(&state_);
+    sgpio_monitor_tab_.SaveState(&state_);
     state_.ui.vid = GetControlText(vid_edit_);
     state_.ui.pid = GetControlText(pid_edit_);
     state_.ui.timeout_ms = GetControlText(timeout_edit_);
@@ -581,6 +601,7 @@ void CMainFrame::ResetIniToDefault() {
     timeout_edit_.SetWindowTextW(state_.ui.timeout_ms.c_str());
     save_log_check_.SetCheck(BST_UNCHECKED);
     sgpio_tab_.LoadState(state_);
+    sgpio_monitor_tab_.LoadState(state_);
     current_fw_version_ = L"-";
     fw_version_match_ = true;
     UpdateFirmwareInfoUi();
@@ -655,6 +676,7 @@ void CMainFrame::OnBnClickedConnect() {
 
 void CMainFrame::OnBnClickedDisconnect() {
     sgpio_tab_.OnDisconnected();
+    sgpio_monitor_tab_.OnDisconnected();
     service_.Disconnect();
     SetConnectionUi(false);
     AppendLog(L"Disconnected");
@@ -684,6 +706,7 @@ void CMainFrame::OnBnClickedResetMcu() {
         service_.ResetMcu();
         AppendLog(L"MCU reset command sent.");
         sgpio_tab_.OnDisconnected();
+        sgpio_monitor_tab_.OnDisconnected();
         service_.Disconnect();
         SetConnectionUi(false);
         RefreshDevices();
@@ -707,6 +730,7 @@ void CMainFrame::OnBnClickedReturnBootloader() {
         AppendLog(L"Return Bootloader command sent; application CRC invalidated.");
         AppendLog(L"Use simple_programming_tool after bootloader VID:PID 0416:3F00 enumerates.");
         sgpio_tab_.OnDisconnected();
+        sgpio_monitor_tab_.OnDisconnected();
         service_.Disconnect();
         SetConnectionUi(false);
     } catch (const std::exception& e) {
@@ -776,6 +800,17 @@ void CMainFrame::OnBnClickedClearLog() {
     log_edit_.SetWindowTextW(L"");
 }
 
+void CMainFrame::OnTabSelChange(NMHDR* notify, LRESULT* result) {
+    UNREFERENCED_PARAMETER(notify);
+    ShowSelectedTab();
+    const bool connected = service_.IsConnected();
+    sgpio_tab_.SetConnected(connected);
+    sgpio_monitor_tab_.SetConnected(connected);
+    if (result != nullptr) {
+        *result = 0;
+    }
+}
+
 HBRUSH CMainFrame::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor) {
     HBRUSH hbr = CFrameWnd::OnCtlColor(pDC, pWnd, nCtlColor);
     if (pWnd != nullptr && pWnd->GetSafeHwnd() == status_chip_.GetSafeHwnd()) {
@@ -789,6 +824,7 @@ HBRUSH CMainFrame::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor) {
 void CMainFrame::OnClose() {
     SaveIni();
     sgpio_tab_.OnDisconnected();
+    sgpio_monitor_tab_.OnDisconnected();
     service_.Disconnect();
     CFrameWnd::OnClose();
 }

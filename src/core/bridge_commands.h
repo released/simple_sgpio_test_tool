@@ -19,6 +19,10 @@ constexpr uint8_t CMD_SGPIO_CONFIG = 0x74;
 constexpr uint8_t CMD_SGPIO_APPLY = 0x75;
 constexpr uint8_t CMD_SGPIO_STATUS = 0x76;
 constexpr uint8_t CMD_SGPIO_OFF = 0x77;
+constexpr uint8_t CMD_SGPIO_MONITOR_CONFIG = 0x78;
+constexpr uint8_t CMD_SGPIO_MONITOR_ARM = 0x79;
+constexpr uint8_t CMD_SGPIO_MONITOR_STATUS = 0x7A;
+constexpr uint8_t CMD_SGPIO_MONITOR_STOP = 0x7B;
 
 inline std::wstring StatusText(uint8_t status) {
     switch (status) {

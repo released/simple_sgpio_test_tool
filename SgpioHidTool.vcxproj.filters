@@ -57,6 +57,7 @@
     <ClCompile Include="src\hid\hid_scan.cpp"><Filter>Source Files\hid</Filter></ClCompile>
     <ClCompile Include="src\log\logger.cpp"><Filter>Source Files\log</Filter></ClCompile>
     <ClCompile Include="src\ui\sgpio_tab.cpp"><Filter>Source Files\ui</Filter></ClCompile>
+    <ClCompile Include="src\ui\sgpio_monitor_tab.cpp"><Filter>Source Files\ui</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\app.h"><Filter>Header Files</Filter></ClInclude>
@@ -77,6 +78,7 @@
     <ClInclude Include="src\log\logger.h"><Filter>Header Files\log</Filter></ClInclude>
     <ClInclude Include="src\ui\layout_utils.h"><Filter>Header Files\ui</Filter></ClInclude>
     <ClInclude Include="src\ui\sgpio_tab.h"><Filter>Header Files\ui</Filter></ClInclude>
+    <ClInclude Include="src\ui\sgpio_monitor_tab.h"><Filter>Header Files\ui</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\sgpio_hid_tool.rc"><Filter>Resource Files</Filter></ResourceCompile>

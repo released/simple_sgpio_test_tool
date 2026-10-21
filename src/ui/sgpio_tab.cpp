@@ -133,7 +133,7 @@ void CSgpioTab::Bind(mfc_tool::core::BridgeService* service,
     log_ = std::move(logger);
     pin_usage_ = pin_usage;
     if (pin_usage_ != nullptr) {
-        pin_usage_->SetLabel(fixed_topology::kSgpio, L"SGPIO");
+        pin_usage_->SetLabel(fixed_topology::kSgpio, L"SGPIO Output");
         pin_usage_->SetClaim(fixed_topology::kSgpio, fixed_topology::SgpioPins());
         pin_usage_->SetActive(fixed_topology::kSgpio, false);
     }
@@ -160,7 +160,7 @@ int CSgpioTab::OnCreate(LPCREATESTRUCT lpCreateStruct) {
         b.SetFont(&ui_font_);
     };
 
-    mk_btn(group_, L"SGPIO (SFF-8485 / IBPI, M032 GPIO host)", IDC_SGPIO_GROUP, BS_GROUPBOX);
+    mk_btn(group_, L"SGPIO Output (SFF-8485 / IBPI, M032 GPIO host)", IDC_SGPIO_GROUP, BS_GROUPBOX);
     mk_static(fixed_pin_title_, L"Fixed Pins", IDC_SGPIO_FIXED_PIN_TITLE);
     mk_static(fixed_pin_value_, L"PA2=SCLK  PA0=SDOUT  PA3=SLOAD  PA1=SDIN(optional)", IDC_SGPIO_FIXED_PIN_VALUE);
     fixed_pin_value_.ModifyStyle(SS_TYPEMASK, SS_LEFTNOWORDWRAP | SS_ENDELLIPSIS);
@@ -691,7 +691,7 @@ void CSgpioTab::RefreshPinUsage() {
     if (pin_usage_ == nullptr) {
         return;
     }
-    pin_usage_->SetLabel(fixed_topology::kSgpio, L"SGPIO");
+    pin_usage_->SetLabel(fixed_topology::kSgpio, L"SGPIO Output");
     pin_usage_->SetClaim(fixed_topology::kSgpio, fixed_topology::SgpioPins());
     pin_usage_->SetActive(fixed_topology::kSgpio, enabled_);
 }

@@ -434,6 +434,11 @@
               <FileType>1</FileType>
               <FilePath>..\m261_bridge_sgpio.c</FilePath>
             </File>
+            <File>
+              <FileName>m261_bridge_sgpio_monitor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\m261_bridge_sgpio_monitor.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

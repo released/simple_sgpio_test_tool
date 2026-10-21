@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Workspace Layout And Safe Clean
+
+Keep src/scripts/docs/build plus vendor demo_code. Screenshots belong in docs/images. clean_mfc.bat delegates to the file-allowlist clean_intermediates.ps1; preserve unknown delivery files inside obj/tests and reject reparse points before deletion.
+
+
 ## Project Scope
 
 This workspace is the M032 EVB SGPIO HID GUI tool.

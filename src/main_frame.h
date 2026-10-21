@@ -12,6 +12,7 @@
 #include "core/bridge_service.h"
 #include "core/pin_usage_registry.h"
 #include "log/logger.h"
+#include "ui/sgpio_monitor_tab.h"
 #include "ui/sgpio_tab.h"
 
 class CMainFrame : public CFrameWnd {
@@ -37,6 +38,7 @@ protected:
     afx_msg void OnBnClickedSaveLog();
     afx_msg void OnBnClickedSaveLogCheck();
     afx_msg void OnBnClickedClearLog();
+    afx_msg void OnTabSelChange(NMHDR* notify, LRESULT* result);
     afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
     afx_msg void OnClose();
 
@@ -44,6 +46,7 @@ protected:
 
 private:
     void LayoutControls(int cx, int cy);
+    void ShowSelectedTab();
     void RecreateUiFont();
     void ApplyTopControlFont();
     void AppendLog(const std::wstring& text);
@@ -106,6 +109,7 @@ private:
 
     CTabCtrl tab_ctrl_;
     CSgpioTab sgpio_tab_;
+    CSgpioMonitorTab sgpio_monitor_tab_;
     CButton save_log_check_;
     CButton save_log_btn_;
     CButton clear_log_btn_;

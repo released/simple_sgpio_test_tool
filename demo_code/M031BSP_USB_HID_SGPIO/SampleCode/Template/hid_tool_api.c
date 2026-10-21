@@ -13,6 +13,7 @@
 #include "hid_tool_api.h"
 #include "../ISP_HID/iap_layout.h"
 #include "m031_bridge_sgpio.h"
+#include "m031_bridge_sgpio_monitor.h"
 #include "misc_config.h"
 
 #define BRIDGE_INFO_NAME             "m032-sgpio-bridge/" M032_BRIDGE_FW_VERSION_STR
@@ -343,6 +344,132 @@ static uint8_t Bridge_HandleSgpio(uint8_t cmd, const uint8_t *payload, uint16_t 
     return 0u;
 }
 
+static uint8_t Bridge_HandleSgpioMonitor(uint8_t cmd, const uint8_t *payload, uint16_t payload_len,
+                                         uint8_t *out, uint16_t *out_len, uint8_t *status)
+{
+    switch (cmd)
+    {
+        case BRIDGE_CMD_SGPIO_MONITOR_CONFIG:
+        {
+            uint8_t expected_slot_count;
+            uint16_t trigger_timeout_ms;
+
+            if (payload_len != 3u)
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            expected_slot_count = payload[0];
+            trigger_timeout_ms = Bridge_ReadU16Le(&payload[1]);
+            if ((expected_slot_count != 0u) &&
+                (expected_slot_count != 4u) &&
+                (expected_slot_count != 8u) &&
+                (expected_slot_count != 16u))
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            if (M031BridgeSgpioMonitor_Config(expected_slot_count, trigger_timeout_ms) == 0u)
+            {
+                *status = BRIDGE_STATUS_BUSY;
+                *out_len = 0u;
+                return 1u;
+            }
+            out[0] = expected_slot_count;
+            Bridge_WriteU16Le(&out[1], trigger_timeout_ms);
+            *status = BRIDGE_STATUS_OK;
+            *out_len = 3u;
+            return 1u;
+        }
+
+        case BRIDGE_CMD_SGPIO_MONITOR_ARM:
+            if (payload_len != 0u)
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            if (M031BridgeSgpioMonitor_Arm() == 0u)
+            {
+                *status = BRIDGE_STATUS_BUSY;
+                *out_len = 0u;
+                return 1u;
+            }
+            out[0] = M031_BRIDGE_SGPIO_MONITOR_STATE_ARMED;
+            out[1] = 6u;
+            out[2] = 4u;
+            out[3] = 5u;
+            *status = BRIDGE_STATUS_OK;
+            *out_len = 4u;
+            return 1u;
+
+        case BRIDGE_CMD_SGPIO_MONITOR_STATUS:
+        {
+            M031_BRIDGE_SGPIO_MONITOR_STATUS_T monitor_status;
+
+            if (payload_len != 0u)
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            if (M031BridgeSgpioMonitor_GetStatus(&monitor_status) == 0u)
+            {
+                *status = BRIDGE_STATUS_NOT_READY;
+                *out_len = 0u;
+                return 1u;
+            }
+
+            out[0] = monitor_status.state;
+            out[1] = monitor_status.expected_slot_count;
+            out[2] = monitor_status.detected_slot_count;
+            out[3] = monitor_status.sload_raw;
+            Bridge_WriteU16Le(&out[4], monitor_status.error_flags);
+            Bridge_WriteU16Le(&out[6], monitor_status.sample_count);
+            Bridge_WriteU16Le(&out[8], monitor_status.clock_rising_count);
+            Bridge_WriteU16Le(&out[10], monitor_status.decoded_bit_count);
+            Bridge_WriteU32Le(&out[12], monitor_status.sample_rate_hz);
+            Bridge_WriteU32Le(&out[16], monitor_status.clock_hz);
+            Bridge_WriteU32Le(&out[20], monitor_status.clock_high_ns);
+            Bridge_WriteU32Le(&out[24], monitor_status.clock_low_ns);
+            Bridge_WriteU16Le(&out[28], monitor_status.act_mask);
+            Bridge_WriteU16Le(&out[30], monitor_status.locate_mask);
+            Bridge_WriteU16Le(&out[32], monitor_status.fail_mask);
+            out[34] = 6u;
+            out[35] = 4u;
+            out[36] = 5u;
+            *status = BRIDGE_STATUS_OK;
+            *out_len = 37u;
+            return 1u;
+        }
+
+        case BRIDGE_CMD_SGPIO_MONITOR_STOP:
+            if (payload_len != 0u)
+            {
+                *status = BRIDGE_STATUS_BAD_PAYLOAD;
+                *out_len = 0u;
+                return 1u;
+            }
+            if (M031BridgeSgpioMonitor_Stop() == 0u)
+            {
+                *status = BRIDGE_STATUS_NOT_READY;
+                *out_len = 0u;
+                return 1u;
+            }
+            out[0] = M031_BRIDGE_SGPIO_MONITOR_STATE_IDLE;
+            *status = BRIDGE_STATUS_OK;
+            *out_len = 1u;
+            return 1u;
+
+        default:
+            break;
+    }
+
+    return 0u;
+}
+
 static void Bridge_ProcessCommand(const uint8_t *req, uint8_t *resp)
 {
     uint8_t cmd;
@@ -382,6 +509,10 @@ static void Bridge_ProcessCommand(const uint8_t *req, uint8_t *resp)
     if (handled == 0u)
     {
         handled = Bridge_HandleSgpio(cmd, payload, payload_len, temp, &out_len, &status);
+    }
+    if (handled == 0u)
+    {
+        handled = Bridge_HandleSgpioMonitor(cmd, payload, payload_len, temp, &out_len, &status);
     }
 
     if (handled == 0u)

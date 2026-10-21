@@ -83,4 +83,25 @@ std::vector<std::uint8_t> BridgeService::SgpioOff() {
     return Tx(CMD_SGPIO_OFF, {});
 }
 
+std::vector<std::uint8_t> BridgeService::SgpioMonitorConfig(int expected_slot_count, int trigger_timeout_ms) {
+    std::vector<std::uint8_t> p;
+    const bool valid_slot_count = expected_slot_count == 0 || expected_slot_count == 4 ||
+                                  expected_slot_count == 8 || expected_slot_count == 16;
+    p.push_back(static_cast<std::uint8_t>(valid_slot_count ? expected_slot_count : 0));
+    AppendLe16(&p, static_cast<std::uint16_t>(std::clamp(trigger_timeout_ms, 100, 0xFFFF)));
+    return Tx(CMD_SGPIO_MONITOR_CONFIG, p);
+}
+
+std::vector<std::uint8_t> BridgeService::SgpioMonitorArm() {
+    return Tx(CMD_SGPIO_MONITOR_ARM, {});
+}
+
+std::vector<std::uint8_t> BridgeService::SgpioMonitorStatus() {
+    return Tx(CMD_SGPIO_MONITOR_STATUS, {});
+}
+
+std::vector<std::uint8_t> BridgeService::SgpioMonitorStop() {
+    return Tx(CMD_SGPIO_MONITOR_STOP, {});
+}
+
 } // namespace mfc_tool::core

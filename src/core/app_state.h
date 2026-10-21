@@ -28,9 +28,15 @@ struct SgpioState {
     std::wstring fail_mask = L"0x0000";
 };
 
+struct SgpioMonitorState {
+    std::wstring expected_slot_count = L"0";
+    std::wstring trigger_timeout_ms = L"3000";
+};
+
 struct AppState {
     UiState ui;
     SgpioState sgpio;
+    SgpioMonitorState sgpio_monitor;
 
     static AppState Default();
 

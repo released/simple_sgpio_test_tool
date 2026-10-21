@@ -18,7 +18,11 @@ build/*.lib
 build/*.exp
 
 # Keil local/user outputs
-demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/lst/
-demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/obj/
-demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/*.uvguix.*
-demo_code/M031BSP_USB_HID_SGPIO/SampleCode/Template/Keil/Nu_Link_Driver.ini
+/build/*.ini
+/build/test_log/
+/tmp/
+demo_code/**/[Kk][Ee][Ii][Ll]/*.uvoptx
+demo_code/**/SampleCode/**/[Kk][Ee][Ii][Ll]/lst/
+demo_code/**/SampleCode/**/[Kk][Ee][Ii][Ll]/obj/
+demo_code/**/SampleCode/**/[Kk][Ee][Ii][Ll]/*.uvguix.*
+demo_code/**/SampleCode/**/[Kk][Ee][Ii][Ll]/Nu_Link_Driver.ini

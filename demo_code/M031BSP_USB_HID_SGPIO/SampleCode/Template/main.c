@@ -9,6 +9,7 @@
 #include "hid_transfer.h"
 #include "hid_tool_api.h"
 #include "m031_bridge_sgpio.h"
+#include "m031_bridge_sgpio_monitor.h"
 /*_____ D E C L A R A T I O N S ____________________________________________*/
 
 volatile struct flag_32bit flag_PROJ_CTL;
@@ -393,6 +394,7 @@ void loop(void)
 
     HidTool_Process();
     M031BridgeSgpio_Process();
+    M031BridgeSgpioMonitor_Process();
 }
 
 void UARTx_Process(void)

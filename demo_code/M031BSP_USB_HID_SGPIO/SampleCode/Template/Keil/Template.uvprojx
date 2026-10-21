@@ -420,6 +420,11 @@
               <FilePath>..\..\..\Library\StdDriver\src\gpio.c</FilePath>
             </File>
             <File>
+              <FileName>fmc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\Library\StdDriver\src\fmc.c</FilePath>
+            </File>
+            <File>
               <FileName>pdma.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\Library\StdDriver\src\pdma.c</FilePath>
@@ -478,6 +483,11 @@
               <FileName>m031_bridge_sgpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\m031_bridge_sgpio.c</FilePath>
+            </File>
+            <File>
+              <FileName>m031_bridge_sgpio_monitor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\m031_bridge_sgpio_monitor.c</FilePath>
             </File>
           </Files>
         </Group>

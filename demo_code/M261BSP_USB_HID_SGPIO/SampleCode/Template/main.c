@@ -8,6 +8,7 @@
 #include "hid_transfer.h"
 #include "hid_tool_api.h"
 #include "m261_bridge_sgpio.h"
+#include "m261_bridge_sgpio_monitor.h"
 
 /*_____ D E C L A R A T I O N S ____________________________________________*/
 
@@ -342,6 +343,7 @@ void loop(void)
     USB_trim_process();
     HidTool_Process();
     M261BridgeSgpio_Process();
+    M261BridgeSgpioMonitor_Process();
 
     if ((get_systick() % 1000) == 0)
     {
@@ -435,6 +437,9 @@ void SYS_Init(void)
     CLK_WaitClockReady(CLK_STATUS_HIRC48STB_Msk);
 
     CLK_SetHCLK(CLK_CLKSEL0_HCLKSEL_HIRC48, CLK_CLKDIV0_HCLK(1));
+    /* Timer2 monitor sampling requires a 48 MHz PCLK1 for exact 3.2 MS/s. */
+    CLK->PCLKDIV = (CLK->PCLKDIV & ~CLK_PCLKDIV_APB1DIV_Msk) |
+                   CLK_PCLKDIV_APB1DIV_DIV1;
 
     CLK_SetModuleClock(USBD_MODULE, CLK_CLKSEL0_USBSEL_HIRC48, CLK_CLKDIV0_USB(1));
     CLK_EnableModuleClock(USBD_MODULE);

@@ -49,7 +49,7 @@ When Windows moves the window to a monitor with a different DPI, the handler:
 
 ## Scaled Metrics
 
-Both the main frame and SGPIO tab use scaled layout values for:
+The main frame, SGPIO Output tab, and SGPIO Monitor tab use scaled layout values for:
 
 - outer margin
 - control gap
@@ -59,6 +59,7 @@ Both the main frame and SGPIO tab use scaled layout values for:
 - combo drop-down height
 - SGPIO slot grid row spacing
 - SGPIO checkbox size
+- monitor result rows and slot-list columns
 
 The SGPIO tab also keeps a responsive fallback for the dense status area. When
 the second row does not have enough horizontal space, the `Status` and
@@ -140,6 +141,10 @@ Run this matrix after any layout, font, tab, or top-level toolbar change.
 | Preset controls fit or status row wraps cleanly | Pass required | Pass required | Pass required |
 | Status and SDataIn fields do not overlap controls | Pass required | Pass required | Pass required |
 | 16-slot ACT/LOCATE/FAIL grid is readable | Pass required | Pass required | Pass required |
+| Output/Monitor tab selection shows only the selected page | Pass required | Pass required | Pass required |
+| Monitor pins, Expected Slots, Timeout, and buttons fit | Pass required | Pass required | Pass required |
+| Monitor timing/error rows do not overlap | Pass required | Pass required | Pass required |
+| Monitor 16-slot result table fits without clipped columns | Pass required | Pass required | Pass required |
 | Vertical scrollbar appears when content exceeds tab | Pass required | Pass required | Pass required |
 | Mouse wheel scroll has no stale control artifacts | Pass required | Pass required | Pass required |
 | Scrollbar thumb scroll has no stale control artifacts | Pass required | Pass required | Pass required |
@@ -149,12 +154,13 @@ Run this matrix after any layout, font, tab, or top-level toolbar change.
 
 1. Set Windows display scaling to 100%.
 2. Launch `build\SgpioHidTool.exe`.
-3. Confirm the top controls, SGPIO tab, slot grid, and log area are readable.
+3. Confirm the top controls, SGPIO Output tab, slot grid, and log area are readable.
 4. Set `Slot Count=16` and verify all slot rows can be reached.
 5. Scroll the SGPIO tab with mouse wheel and scrollbar.
-6. Repeat the same check at 125%.
-7. Repeat the same check at 150%.
-8. If available, move the running window between monitors with different DPI and
+6. Select `SGPIO Monitor`; verify the pin reminder, control rows, status fields, and all four slot-table columns.
+7. Repeat the same checks at 125%.
+8. Repeat the same checks at 150%.
+9. If available, move the running window between monitors with different DPI and
    confirm `WM_DPICHANGED` refreshes fonts and layout without stale pixels.
 
 Hardware is not required for the DPI visual pass. HID connect and SGPIO output

@@ -31,6 +31,11 @@ public:
     std::vector<std::uint8_t> SgpioStatus();
     std::vector<std::uint8_t> SgpioOff();
 
+    std::vector<std::uint8_t> SgpioMonitorConfig(int expected_slot_count, int trigger_timeout_ms);
+    std::vector<std::uint8_t> SgpioMonitorArm();
+    std::vector<std::uint8_t> SgpioMonitorStatus();
+    std::vector<std::uint8_t> SgpioMonitorStop();
+
 private:
     std::vector<std::uint8_t> Tx(std::uint8_t cmd, const std::vector<std::uint8_t>& payload);
 

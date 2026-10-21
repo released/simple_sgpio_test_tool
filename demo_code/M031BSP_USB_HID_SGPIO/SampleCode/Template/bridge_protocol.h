@@ -27,5 +27,9 @@
 #define BRIDGE_CMD_SGPIO_APPLY               0x75u
 #define BRIDGE_CMD_SGPIO_STATUS              0x76u
 #define BRIDGE_CMD_SGPIO_OFF                 0x77u
+#define BRIDGE_CMD_SGPIO_MONITOR_CONFIG      0x78u
+#define BRIDGE_CMD_SGPIO_MONITOR_ARM         0x79u
+#define BRIDGE_CMD_SGPIO_MONITOR_STATUS      0x7Au
+#define BRIDGE_CMD_SGPIO_MONITOR_STOP        0x7Bu
 
 #endif /* __BRIDGE_PROTOCOL_H__ */
