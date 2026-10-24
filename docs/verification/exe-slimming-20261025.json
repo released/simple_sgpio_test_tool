@@ -1,0 +1,178 @@
+{
+  "Date": "2026-10-25",
+  "Target": "Release|x64",
+  "Toolchain": "MSVC 14.44.35207",
+  "Candidate": [
+    {
+      "StartupMs": 471.21290000000005,
+      "WorkflowMs": 15.8244,
+      "CpuMs": 406.25,
+      "PeakBytes": 27648000
+    },
+    {
+      "StartupMs": 493.67670000000004,
+      "WorkflowMs": 12.7356,
+      "CpuMs": 375,
+      "PeakBytes": 27660288
+    },
+    {
+      "StartupMs": 472.68390000000005,
+      "WorkflowMs": 16.424,
+      "CpuMs": 390.625,
+      "PeakBytes": 27660288
+    },
+    {
+      "StartupMs": 452.12850000000003,
+      "WorkflowMs": 19.0165,
+      "CpuMs": 375,
+      "PeakBytes": 27656192
+    },
+    {
+      "StartupMs": 470.5258,
+      "WorkflowMs": 1.8703,
+      "CpuMs": 328.125,
+      "PeakBytes": 27643904
+    }
+  ],
+  "OriginalExeBytes": 2849792,
+  "BaselineBytes": 2849792,
+  "FormalBytes": 760320,
+  "BaselineSHA256": "F98A67F9611A7D1941A0E0E7FAE48689E7471635F587F46EC26A21A416FF7854",
+  "FormalSHA256": "6ED7B65BA32A2980C63C0F38936A91F913B141B9E33D5603E59175613F32704B",
+  "RequiredFiles": [
+    "SgpioHidTool.exe"
+  ],
+  "DeliveryBeforeBytes": 2849792,
+  "DeliveryAfterBytes": 760320,
+  "Profile": "Startup",
+  "Samples": 5,
+  "Order": "baseline calibration before candidate; alternating AB/BA measured pairs",
+  "Limits": {
+    "StartupMs": {
+      "Median": 454.3852,
+      "MAD": 2.17289999999997,
+      "AllowedDelta": 45
+    },
+    "PeakBytes": {
+      "Median": 28106752,
+      "MAD": 20480,
+      "AllowedDelta": 1405338
+    },
+    "CpuMs": {
+      "Median": 406.25,
+      "MAD": 31.25,
+      "AllowedDelta": 94
+    },
+    "WorkflowMs": {
+      "Median": 15.174100000000001,
+      "MAD": 3.7904999999999998,
+      "AllowedDelta": 11
+    }
+  },
+  "Checks": [
+    {
+      "Metric": "StartupMs",
+      "BaselineMedian": 458.714,
+      "CandidateMedian": 471.21290000000005,
+      "Limit": 503.714,
+      "Pass": true
+    },
+    {
+      "Metric": "PeakBytes",
+      "BaselineMedian": 28094464,
+      "CandidateMedian": 27656192,
+      "Limit": 29499802,
+      "Pass": true
+    },
+    {
+      "Metric": "CpuMs",
+      "BaselineMedian": 390.625,
+      "CandidateMedian": 375,
+      "Limit": 484.625,
+      "Pass": true
+    },
+    {
+      "Metric": "WorkflowMs",
+      "BaselineMedian": 15.2653,
+      "CandidateMedian": 15.8244,
+      "Limit": 26.2653,
+      "Pass": true
+    }
+  ],
+  "ControlShapePass": true,
+  "Calibration": [
+    {
+      "StartupMs": 452.2123,
+      "WorkflowMs": 15.174100000000001,
+      "CpuMs": 421.875,
+      "PeakBytes": 28106752
+    },
+    {
+      "StartupMs": 454.3852,
+      "WorkflowMs": 17.044700000000002,
+      "CpuMs": 343.75,
+      "PeakBytes": 28082176
+    },
+    {
+      "StartupMs": 520.6242,
+      "WorkflowMs": 0.8394,
+      "CpuMs": 406.25,
+      "PeakBytes": 28086272
+    },
+    {
+      "StartupMs": 463.69370000000004,
+      "WorkflowMs": 2.0124,
+      "CpuMs": 343.75,
+      "PeakBytes": 28139520
+    },
+    {
+      "StartupMs": 452.98740000000004,
+      "WorkflowMs": 18.9646,
+      "CpuMs": 437.5,
+      "PeakBytes": 28106752
+    }
+  ],
+  "Baseline": [
+    {
+      "StartupMs": 458.714,
+      "WorkflowMs": 15.367700000000001,
+      "CpuMs": 421.875,
+      "PeakBytes": 28082176
+    },
+    {
+      "StartupMs": 481.9988,
+      "WorkflowMs": 0.9767,
+      "CpuMs": 390.625,
+      "PeakBytes": 28090368
+    },
+    {
+      "StartupMs": 454.51680000000005,
+      "WorkflowMs": 1.2827,
+      "CpuMs": 390.625,
+      "PeakBytes": 28094464
+    },
+    {
+      "StartupMs": 449.1498,
+      "WorkflowMs": 16.5818,
+      "CpuMs": 390.625,
+      "PeakBytes": 28135424
+    },
+    {
+      "StartupMs": 478.54420000000005,
+      "WorkflowMs": 15.2653,
+      "CpuMs": 390.625,
+      "PeakBytes": 28135424
+    }
+  ],
+  "Clean": {
+    "Protected": 11,
+    "RemovedCompilerFiles": 30
+  },
+  "NotRun": [
+    "Physical devices/firmware",
+    "Visual/DPI",
+    "Clean-PC",
+    "Win32 builds"
+  ],
+  "AdditionalFix": null
+}

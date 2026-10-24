@@ -1,5 +1,17 @@
 # HANDOFF
 
+## Verified x64 EXE slimming 2026-10-25
+
+- Canonical Release and isolated Debug builds, owned control/dialog/normal-close
+  checks and five alternating performance pairs PASS; no real INI/device/clipboard.
+- EXE 2849792 -> 760320 bytes; required files 2849792 -> 760320 bytes.
+- SHA-256: 6ED7B65BA32A2980C63C0F38936A91F913B141B9E33D5603E59175613F32704B.
+- Actual clean removed 30 compiler files; all 11 protected actual
+  files unchanged by SHA. Nested fixtures/help/idempotence PASS.
+- Raw sanitized samples/limits: docs/verification/exe-slimming-20261025.json.
+  Physical devices, firmware, visual/DPI/clean-PC/Win32 acceptance NOT RUN.
+- Ordinary publication commit/remote SHA: shared EXE_SLIMMING_PROGRESS.md.
+
 ## Authorized publication preflight (2026-10-21)
 
 - The user now authorizes publishing this repository, superseding the earlier deferred-push note. Scope includes the preserved feature work, layout/clean changes, documentation and reviewed native delivery; no unrelated repository is included.

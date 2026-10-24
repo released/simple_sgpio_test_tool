@@ -197,6 +197,10 @@
     <ClInclude Include="src\ui\sgpio_monitor_tab.h" />
   </ItemGroup>
 
+  <!-- Only standard/common/custom controls; scope reduction to x64. -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
+    <ClCompile><PreprocessorDefinitions>_AFX_NO_MFC_CONTROLS_IN_DIALOGS;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

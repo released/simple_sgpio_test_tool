@@ -1,5 +1,12 @@
 # SGPIO HID Tool
 
+## Release size
+
+Release x64 EXE: 760320 bytes (comparable baseline 2849792).
+Features, static runtime, required files and Win32 settings are retained.
+See SELF_CHECK.md and the sanitized [verification record](docs/verification/exe-slimming-20261025.json)
+for actual scope, measurements and limitations.
+
 ## Publication and local data
 
 The current source/layout and native delivery are published without personal INIs,
