@@ -1,21 +1,5 @@
 # SGPIO HID Tool
 
-## Release size
-
-Release x64 EXE: 760320 bytes (comparable baseline 2849792).
-Features, static runtime, required files and Win32 settings are retained.
-See SELF_CHECK.md and the sanitized [verification record](docs/verification/exe-slimming-20261025.json)
-for actual scope, measurements and limitations.
-
-## Publication and local data
-
-The current source/layout and native delivery are published without personal INIs,
-logs or debugger/user options. Defaults are generated locally where supported;
-existing local settings/data are not deleted by clean or publication. Current-tree
-index removals do not erase earlier Git history. See SELF_CHECK.md for actual
-build/test results and hardware limitations.
-
-
 Windows MFC GUI tool and M032/M261 USB HID firmware for using an EVB as an SGPIO bridge board.
 
 The PC GUI connects to the bridge EVB over USB HID. `SGPIO Output` generates SGPIO frames for a target device, while `SGPIO Monitor` passively captures and decodes an independent external SGPIO source. The main output use case is validating external SGPIO target/device firmware such as:
@@ -376,7 +360,8 @@ Saved state includes:
 - SGPIO slot count, clock, periodic setting, interval, SLOAD raw bits, and ACT/LOCATE/FAIL masks
 - SGPIO monitor expected slot count and trigger timeout
 
-This repository intentionally keeps `build\SgpioHidTool.exe`, `build\sgpio_hid_tool.ini`, and sanitized captures under `build\test_log` so first-time users can launch the tool and compare known-good SGPIO logs. Keep these files free of local absolute paths before publishing. Ad-hoc logs saved directly under `build\*.log` remain local-only.
+Settings and recorded logs are local runtime data. Review file paths and
+device-specific details before sharing a log.
 
 ## Project Structure
 
@@ -389,55 +374,9 @@ This repository intentionally keeps `build\SgpioHidTool.exe`, `build\sgpio_hid_t
 - `HANDOFF.md` - current implementation handoff notes.
 - `AGENTS.md` - local development rules for this workspace.
 
-## GitHub Upload Notes
+## Board Operation
 
-Before uploading a public copy, keep source, scripts, docs, firmware project files, project metadata, and these user-facing build artifacts:
-
-- `build\SgpioHidTool.exe`
-- `build\sgpio_hid_tool.ini`
-- `build\test_log\`
-
-Exclude local and generated artifacts:
-
-- `build\obj\`
-- `build\*.pdb`, `build\*.ilk`, `build\*.idb`, `build\*.iobj`, `build\*.ipdb`
-- `build\*.lib`, `build\*.exp`
-- `build\*.log`
-- root `teraterm.log`
-- Keil `lst\`, `obj\`, `*.uvguix.*`, and local debug-driver INI files
-
-The included `.gitignore` is set up for this split.
-
-Known local-sensitive patterns to watch for before publishing:
-
-- absolute Windows drive or user-profile paths
-- user-specific Keil UI files such as `Template.uvguix.<user>`
-- Nu-Link local debug configuration files
-- logs that include machine paths, COM-port names, or lab-only device serial details
-
-## Verification
-
-PC build:
-
-```bat
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_mfc.ps1 -Configuration Release -Platform x64
-```
-
-Firmware syntax check, when `arm-none-eabi-gcc` is available:
-
-```bat
-arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -std=gnu99 -fsyntax-only ^
-  -Idemo_code\M031BSP_USB_HID_SGPIO\Library\CMSIS\Core\Include ^
-  -Idemo_code\M031BSP_USB_HID_SGPIO\Library\Device\Nuvoton\M031\Include ^
-  -Idemo_code\M031BSP_USB_HID_SGPIO\Library\StdDriver\inc ^
-  -Idemo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template ^
-  demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\m031_bridge_sgpio.c ^
-  demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\m031_bridge_sgpio_monitor.c ^
-  demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\hid_tool_api.c ^
-  demo_code\M031BSP_USB_HID_SGPIO\SampleCode\Template\main.c
-```
-
-Hardware smoke test:
+Example setup:
 
 1. Flash firmware `1.1.0` to an M032 or M261 EVB.
 2. Launch `build\SgpioHidTool.exe`.
@@ -452,4 +391,5 @@ Hardware smoke test:
 11. Disable output, wire an independent SGPIO source to `PA6/PA4/PA5/GND`, then use `SGPIO Monitor` -> `Arm`.
 12. Trigger one external frame and compare the decoded clock, slot count, masks, and error flags with the source settings.
 
-See `SELF_CHECK.md` for the latest verification result captured in this workspace.
+Validate the selected bridge/target combination on hardware before relying on
+its results. Compiler checks alone are not electrical or timing acceptance.
