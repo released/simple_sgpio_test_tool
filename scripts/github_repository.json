@@ -1,0 +1,14 @@
+{
+  "publication_enabled": true,
+  "repository": "released/simple_sgpio_test_tool",
+  "visibility": "PUBLIC",
+  "branch": "main",
+  "readme_title": "SGPIO HID Tool",
+  "identity_files": [
+    "README.md",
+    "SgpioHidTool.vcxproj"
+  ],
+  "delivery_files": [
+    "build/SgpioHidTool.exe"
+  ]
+}
