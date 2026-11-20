@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <cstdint>
+#include <atomic>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -23,7 +24,19 @@ private:
     std::uint8_t status_ = 0;
 };
 
-class HidBridgeClient {
+class BridgeTransport {
+public:
+    virtual ~BridgeTransport() = default;
+    virtual void Connect(std::uint16_t vid, std::uint16_t pid, const std::wstring& path, int timeout_ms) = 0;
+    virtual void Disconnect() = 0;
+    virtual bool IsConnected() const noexcept = 0;
+    virtual std::vector<std::uint8_t> Transact(std::uint8_t cmd, const std::vector<std::uint8_t>& payload) = 0;
+    virtual void RequestCancel() noexcept = 0;
+    virtual void ResetCancel() noexcept = 0;
+    virtual std::vector<DeviceInfo> Scan(std::uint16_t vid, std::uint16_t pid) const = 0;
+};
+
+class HidBridgeClient : public BridgeTransport {
 public:
     HidBridgeClient() = default;
     ~HidBridgeClient();
@@ -38,6 +51,9 @@ public:
     [[nodiscard]] const DeviceInfo& CurrentDevice() const noexcept { return device_; }
 
     std::vector<std::uint8_t> Transact(std::uint8_t cmd, const std::vector<std::uint8_t>& payload);
+    void RequestCancel() noexcept override { cancelled_ = true; }
+    void ResetCancel() noexcept override { cancelled_ = false; }
+    std::vector<DeviceInfo> Scan(std::uint16_t vid, std::uint16_t pid) const override;
 
 private:
     void OpenHandle(const std::wstring& path);
@@ -53,6 +69,7 @@ private:
     DeviceInfo device_ = {};
     int timeout_ms_ = 2000;
     std::uint8_t seq_ = 1;
+    std::atomic<bool> cancelled_{false};
 };
 
 } // namespace mfc_tool::hid

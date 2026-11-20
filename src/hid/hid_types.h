@@ -21,6 +21,10 @@ struct DeviceInfo {
     bool IsPreferredBridge() const {
         return usage_page == 0xFF00 && usage == 0x0001;
     }
+    bool HasBridgeReports() const {
+        return (input_report_len == 64 || input_report_len == 65) &&
+               (output_report_len == 64 || output_report_len == 65);
+    }
 };
 
 } // namespace mfc_tool::hid

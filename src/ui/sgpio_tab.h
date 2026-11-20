@@ -8,6 +8,7 @@
 
 #include "../core/app_state.h"
 #include "../core/bridge_service.h"
+#include "../core/bridge_job.h"
 #include "../core/pin_usage_registry.h"
 
 class CSgpioTab : public CWnd {
@@ -17,6 +18,8 @@ public:
     void Bind(mfc_tool::core::BridgeService* service,
               std::function<void(const std::wstring&)> logger,
               mfc_tool::core::PinUsageRegistry* pin_usage);
+    void SetRuntime(bool busy, const mfc_tool::core::SgpioModel& model);
+    void SetSubmit(mfc_tool::core::BridgeSubmit submit) { submit_ = std::move(submit); }
     void SetConnected(bool connected);
     void OnDisconnected();
     void RefreshDpiLayout();
@@ -54,6 +57,7 @@ private:
     void SetStatusText(const std::wstring& text);
     void RefreshPinUsage();
     void ApplyFromUi(bool enable);
+    void ApplyStatus(const mfc_tool::core::OutputSnapshot& status);
     void ApplyMasksToChecks(int act_mask, int locate_mask, int fail_mask);
     void BuildMasksFromChecks(int* act_mask, int* locate_mask, int* fail_mask) const;
     void PopulateSlotCombos();
@@ -69,6 +73,9 @@ private:
     std::function<void(const std::wstring&)> log_;
     bool connected_ = false;
     bool enabled_ = false;
+    bool busy_ = false;
+    mfc_tool::core::SgpioModel model_;
+    mfc_tool::core::BridgeSubmit submit_;
     int scroll_offset_ = 0;
     int virtual_content_height_ = 0;
 

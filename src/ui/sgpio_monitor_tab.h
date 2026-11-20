@@ -10,6 +10,7 @@
 
 #include "../core/app_state.h"
 #include "../core/bridge_service.h"
+#include "../core/bridge_job.h"
 #include "../core/pin_usage_registry.h"
 
 class CSgpioMonitorTab : public CWnd {
@@ -19,6 +20,8 @@ public:
     void Bind(mfc_tool::core::BridgeService* service,
               std::function<void(const std::wstring&)> logger,
               mfc_tool::core::PinUsageRegistry* pin_usage);
+    void SetRuntime(bool busy, const mfc_tool::core::SgpioModel& model);
+    void SetSubmit(mfc_tool::core::BridgeSubmit submit) { submit_ = std::move(submit); }
     void SetConnected(bool connected);
     void OnDisconnected();
     void RefreshDpiLayout();
@@ -42,7 +45,7 @@ private:
     void StartPolling();
     void StopPolling();
     void ReadAndDisplayStatus(bool from_poll);
-    void ApplyStatus(const std::vector<std::uint8_t>& data);
+    void ApplyStatus(const mfc_tool::core::MonitorSnapshot& status);
     void UpdateSlotRows(int slot_count, std::uint16_t act_mask,
                         std::uint16_t locate_mask, std::uint16_t fail_mask);
     int ExpectedSlotCount() const;
@@ -57,6 +60,9 @@ private:
     mfc_tool::core::PinUsageRegistry* pin_usage_ = nullptr;
     std::function<void(const std::wstring&)> log_;
     bool connected_ = false;
+    bool busy_ = false;
+    mfc_tool::core::SgpioModel model_;
+    mfc_tool::core::BridgeSubmit submit_;
     bool armed_ = false;
     bool polling_ = false;
     std::uint8_t current_state_ = 0u;

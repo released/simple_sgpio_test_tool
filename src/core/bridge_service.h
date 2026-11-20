@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <memory>
+#include "sgpio_model.h"
 
 #include "bridge_commands.h"
 #include "../hid/hid_bridge_client.h"
@@ -12,7 +14,12 @@ namespace mfc_tool::core {
 
 class BridgeService {
 public:
-    BridgeService() = default;
+    BridgeService();
+    explicit BridgeService(std::unique_ptr<mfc_tool::hid::BridgeTransport> transport);
+    void RequestCancel() noexcept { client_->RequestCancel(); }
+    void ResetCancel() noexcept { client_->ResetCancel(); }
+    const SgpioModel& Model() const noexcept { return model_; }
+    OutputSnapshot ApplyOutput(int slots, int clock, bool periodic, int interval, int sload, int act, int locate, int fail);
 
     std::vector<mfc_tool::hid::DeviceInfo> ScanDevices(std::uint16_t vid, std::uint16_t pid) const;
 
@@ -40,7 +47,8 @@ private:
     std::vector<std::uint8_t> Tx(std::uint8_t cmd, const std::vector<std::uint8_t>& payload);
 
 private:
-    mfc_tool::hid::HidBridgeClient client_;
+    std::unique_ptr<mfc_tool::hid::BridgeTransport> client_;
+    SgpioModel model_;
 };
 
 } // namespace mfc_tool::core

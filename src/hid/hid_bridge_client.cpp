@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "hid_scan.h"
+#include "overlapped_io.h"
 #include "../core/bridge_commands.h"
 
 namespace mfc_tool::hid {
@@ -28,68 +29,6 @@ HANDLE AsHandle(void* h) {
     return reinterpret_cast<HANDLE>(h);
 }
 
-std::vector<std::uint8_t> IoReadWithTimeout(HANDLE handle, DWORD bytes_to_read, int timeout_ms) {
-    std::vector<std::uint8_t> out(bytes_to_read, 0);
-
-    OVERLAPPED ov = {};
-    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (!ov.hEvent) {
-        throw BridgeException("CreateEvent failed for ReadFile");
-    }
-
-    DWORD read_bytes = 0;
-    BOOL ok = ReadFile(handle, out.data(), bytes_to_read, nullptr, &ov);
-    if (!ok && GetLastError() != ERROR_IO_PENDING) {
-        CloseHandle(ov.hEvent);
-        throw BridgeException("ReadFile failed");
-    }
-
-    DWORD wait = WaitForSingleObject(ov.hEvent, static_cast<DWORD>((std::max)(1, timeout_ms)));
-    if (wait != WAIT_OBJECT_0) {
-        CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
-        throw BridgeException(wait == WAIT_TIMEOUT ? "Read timeout" : "Read wait failed");
-    }
-
-    if (!GetOverlappedResult(handle, &ov, &read_bytes, FALSE)) {
-        CloseHandle(ov.hEvent);
-        throw BridgeException("GetOverlappedResult(read) failed");
-    }
-
-    CloseHandle(ov.hEvent);
-    out.resize(read_bytes);
-    return out;
-}
-
-DWORD IoWriteWithTimeout(HANDLE handle, const std::vector<std::uint8_t>& data, int timeout_ms) {
-    OVERLAPPED ov = {};
-    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (!ov.hEvent) {
-        throw BridgeException("CreateEvent failed for WriteFile");
-    }
-
-    DWORD written = 0;
-    BOOL ok = WriteFile(handle, data.data(), static_cast<DWORD>(data.size()), nullptr, &ov);
-    if (!ok && GetLastError() != ERROR_IO_PENDING) {
-        CloseHandle(ov.hEvent);
-        throw BridgeException("WriteFile failed");
-    }
-
-    DWORD wait = WaitForSingleObject(ov.hEvent, static_cast<DWORD>((std::max)(1, timeout_ms)));
-    if (wait != WAIT_OBJECT_0) {
-        CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
-        throw BridgeException(wait == WAIT_TIMEOUT ? "Write timeout" : "Write wait failed");
-    }
-
-    if (!GetOverlappedResult(handle, &ov, &written, FALSE)) {
-        CloseHandle(ov.hEvent);
-        throw BridgeException("GetOverlappedResult(write) failed");
-    }
-
-    CloseHandle(ov.hEvent);
-    return written;
-}
 
 void QueryCaps(HANDLE handle, DeviceInfo* info) {
     if (info == nullptr) {
@@ -163,34 +102,34 @@ HidBridgeClient::~HidBridgeClient() {
     Disconnect();
 }
 
+std::vector<DeviceInfo> HidBridgeClient::Scan(std::uint16_t vid, std::uint16_t pid) const {
+    return EnumerateHidDevices(vid, pid, true);
+}
+
 void HidBridgeClient::Connect(std::uint16_t vid, std::uint16_t pid, const std::wstring& path, int timeout_ms) {
     Disconnect();
 
     timeout_ms_ = (std::max)(100, timeout_ms);
     seq_ = 1;
 
-    if (!path.empty()) {
-        OpenHandle(path);
-        device_.path = path;
-    } else {
-        auto devices = EnumerateHidDevices(vid, pid, true);
-        auto preferred = SelectPreferredDevice(devices);
-        if (!preferred.has_value()) {
-            throw BridgeException("No matching HID device found");
-        }
-        device_ = preferred.value();
-        OpenHandle(device_.path);
+    if (cancelled_.load()) throw BridgeException("Connect cancelled");
+    const auto devices = EnumerateHidDevices(vid, pid, true);
+    std::vector<DeviceInfo> candidates;
+    for (const auto& d : devices) {
+        if (d.IsPreferredBridge() && d.HasBridgeReports() && (path.empty() || d.path == path)) candidates.push_back(d);
     }
+    if (candidates.size() != 1) throw BridgeException("Select one currently enumerated SGPIO HID interface");
+    device_ = candidates.front();
+    const auto enumerated_serial = device_.serial_number;
+    OpenHandle(device_.path);
 
     PopulateDeviceMeta();
 
-    if (device_.vendor_id != 0 && vid != 0 && device_.vendor_id != vid) {
+    if (cancelled_.load() || device_.vendor_id != vid || device_.product_id != pid ||
+        !device_.IsPreferredBridge() || !device_.HasBridgeReports() ||
+        (!enumerated_serial.empty() && enumerated_serial != device_.serial_number)) {
         Disconnect();
-        throw BridgeException("Connected VID does not match requested VID");
-    }
-    if (device_.product_id != 0 && pid != 0 && device_.product_id != pid) {
-        Disconnect();
-        throw BridgeException("Connected PID does not match requested PID");
+        throw BridgeException("HID identity/report contract mismatch or connection cancelled");
     }
 }
 
@@ -234,18 +173,15 @@ void HidBridgeClient::PopulateDeviceMeta() {
         return;
     }
 
+    const auto path = device_.path;
+    device_ = {};
+    device_.path = path;
     QueryAttributes(h, &device_);
     QueryCaps(h, &device_);
     device_.manufacturer = QueryWideString(h, HidD_GetManufacturerString);
     device_.product = QueryWideString(h, HidD_GetProductString);
     device_.serial_number = QueryWideString(h, HidD_GetSerialNumberString);
 
-    if (device_.input_report_len == 0) {
-        device_.input_report_len = 65;
-    }
-    if (device_.output_report_len == 0) {
-        device_.output_report_len = 65;
-    }
 }
 
 std::vector<std::uint8_t> HidBridgeClient::BuildWriteReport(const std::vector<std::uint8_t>& frame) const {
@@ -287,7 +223,8 @@ std::vector<std::uint8_t> HidBridgeClient::ReadFrame(std::uint8_t cmd, std::uint
         int remain_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout - (now - start)).count());
         remain_ms = (std::max)(50, remain_ms);
 
-        std::vector<std::uint8_t> read_buf = IoReadWithTimeout(h, in_len, remain_ms);
+        std::vector<std::uint8_t> read_buf(in_len, 0);
+        read_buf.resize(IoWithTimeout(h, read_buf.data(), in_len, remain_ms, cancelled_, false));
         if (read_buf.empty()) {
             continue;
         }
@@ -355,8 +292,8 @@ std::vector<std::uint8_t> HidBridgeClient::Transact(std::uint8_t cmd, const std:
     std::copy(payload.begin(), payload.end(), frame.begin() + kHeaderSize);
 
     std::vector<std::uint8_t> report = BuildWriteReport(frame);
-    DWORD written = IoWriteWithTimeout(h, report, timeout_ms_);
-    if (written == 0) {
+    DWORD written = IoWithTimeout(h, report.data(), static_cast<DWORD>(report.size()), timeout_ms_, cancelled_, true);
+    if (written != report.size()) {
         throw BridgeException("failed to write HID report");
     }
 

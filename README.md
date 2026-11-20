@@ -18,6 +18,24 @@ The PC GUI connects to the bridge EVB over USB HID. `SGPIO Output` generates SGP
 - Monitor capture: M032 and M261 firmware; 3.2 MS/s Timer2-triggered PDMA capture with Auto/4/8/16-slot decode.
 - Not in scope: Pico board support, I2C bridge behavior, PMBus/SMBus tabs, full `SDATA IN` frame capture.
 
+## PC Architecture And Operation State
+
+- MFC tabs collect settings and display typed SGPIO snapshots. `core/sgpio_model`
+  validates board identity, status values and the fixed pin map; `BridgeService`
+  owns command sequencing and Output/Monitor admission.
+- `hid/` owns HID enumeration, report framing and overlapped I/O. All bridge
+  operations share one background worker, including scan, connect, status and
+  monitor polling. Busy remains active until the result is consumed.
+- Connect accepts a currently enumerated bridge interface and confirms its board
+  identity and status before enabling operations. Auto Select requires one matching
+  interface; multiple bridges require explicit selection.
+- Disconnect cancels local waiting and closes the connection after pending I/O
+  finishes. It does not send an Output Disable or Monitor Stop command. Use those
+  explicit controls before disconnecting when a confirmed stop is required.
+- A lost response leaves the remote state unknown. Reconnect reads status without
+  replaying the previous command. Unknown ownership blocks switching between
+  Output and Monitor until status or an acknowledged stop confirms the state.
+
 ## UI Screenshot
 
 ![M032 SGPIO HID Tool main UI](docs/images/main.jpg)

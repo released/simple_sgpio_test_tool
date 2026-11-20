@@ -51,57 +51,20 @@ enum : UINT {
     IDC_SGPIO_FAIL_CHECK_BASE = IDC_SGPIO_LOCATE_CHECK_BASE + 32,
 };
 
-constexpr int kSgpioSdataInPin = 1;
-constexpr int kSgpioLoadPin = 3;
-constexpr int kSgpioDataPin = 0;
-constexpr int kSgpioClockPin = 2;
+constexpr int kSgpioSdataInPin = fixed_topology::kInputData;
+constexpr int kSgpioLoadPin = fixed_topology::kOutputLoad;
+constexpr int kSgpioDataPin = fixed_topology::kOutputData;
+constexpr int kSgpioClockPin = fixed_topology::kOutputClock;
 constexpr int kSgpioSlotMax = 16;
-constexpr size_t kSgpioStatusBaseSize = 21u;
-constexpr size_t kSgpioStatusCaptureHeaderSize = 24u;
-
-std::uint32_t ReadLe32(const std::vector<std::uint8_t>& data, size_t offset) {
-    if (offset + 3u >= data.size()) {
-        return 0u;
+std::wstring FormatSdinCapture(const mfc_tool::core::OutputSnapshot& status) {
+    if (!status.capture_valid) return L"-";
+    std::wstringstream text;
+    text << status.capture_bits << L"b:" << std::uppercase << std::hex << std::setfill(L'0');
+    for (size_t i = 0; i < status.capture_words.size(); ++i) {
+        if (i != 0) text << L",";
+        text << std::setw(4) << (status.capture_words[i] & 0xFFFFu);
     }
-    return static_cast<std::uint32_t>(data[offset]) |
-           (static_cast<std::uint32_t>(data[offset + 1u]) << 8u) |
-           (static_cast<std::uint32_t>(data[offset + 2u]) << 16u) |
-           (static_cast<std::uint32_t>(data[offset + 3u]) << 24u);
-}
-
-std::wstring FormatSdinCapture(const std::vector<std::uint8_t>& data) {
-    std::wstringstream ss;
-    size_t words_available = 0u;
-    size_t i = 0u;
-    int word_count = 0;
-    int bit_count = 0;
-
-    if (data.size() < kSgpioStatusCaptureHeaderSize || data[21] == 0u) {
-        return L"-";
-    }
-
-    word_count = static_cast<int>(data[22]);
-    bit_count = static_cast<int>(data[23]);
-    words_available = (data.size() - kSgpioStatusCaptureHeaderSize) / 4u;
-    if (word_count < 0) {
-        word_count = 0;
-    }
-    if (static_cast<size_t>(word_count) > words_available) {
-        word_count = static_cast<int>(words_available);
-    }
-    if (word_count > 4) {
-        word_count = 4;
-    }
-
-    ss << bit_count << L"b:";
-    ss << std::uppercase << std::hex << std::setfill(L'0');
-    for (i = 0u; i < static_cast<size_t>(word_count); ++i) {
-        if (i > 0u) {
-            ss << L",";
-        }
-        ss << std::setw(4) << (ReadLe32(data, kSgpioStatusCaptureHeaderSize + i * 4u) & 0xFFFFu);
-    }
-    return ss.str();
+    return text.str();
 }
 
 } // namespace
@@ -546,14 +509,26 @@ void CSgpioTab::LayoutSlotGrid(int left, int top, int right, int bottom) {
         mfc_tool::ui::SafeMoveWindow(locate_checks_[i], locate_x + (col_w - check_size) / 2, row_y, check_size, check_size);
         mfc_tool::ui::SafeMoveWindow(fail_checks_[i], fail_x + (col_w - check_size) / 2, row_y, check_size, check_size);
         mfc_tool::ui::SafeEnableWindow(slot_labels_[i], active_slot ? TRUE : FALSE);
-        mfc_tool::ui::SafeEnableWindow(act_checks_[i], (connected_ && active_slot) ? TRUE : FALSE);
-        mfc_tool::ui::SafeEnableWindow(locate_checks_[i], (connected_ && active_slot) ? TRUE : FALSE);
-        mfc_tool::ui::SafeEnableWindow(fail_checks_[i], (connected_ && active_slot) ? TRUE : FALSE);
+        mfc_tool::ui::SafeEnableWindow(act_checks_[i], (connected_ && !busy_ && active_slot) ? TRUE : FALSE);
+        mfc_tool::ui::SafeEnableWindow(locate_checks_[i], (connected_ && !busy_ && active_slot) ? TRUE : FALSE);
+        mfc_tool::ui::SafeEnableWindow(fail_checks_[i], (connected_ && !busy_ && active_slot) ? TRUE : FALSE);
     }
 }
 
 void CSgpioTab::SetConnected(bool connected) {
     connected_ = connected;
+    UpdateEnableState();
+}
+
+void CSgpioTab::SetRuntime(bool busy, const mfc_tool::core::SgpioModel& model) {
+    busy_ = busy;
+    model_ = model;
+    enabled_ = model.output == mfc_tool::core::PinState::Active;
+    if (model.output == mfc_tool::core::PinState::Unknown) {
+        SetStatusText(connected_ ? L"Unknown - Get Status required" : L"Disconnected - state unknown");
+        SetSdataInText(-1);
+    }
+    RefreshPinUsage();
     UpdateEnableState();
 }
 
@@ -610,8 +585,9 @@ void CSgpioTab::UpdateEnableState() {
         return;
     }
 
-    const BOOL connected = connected_ ? TRUE : FALSE;
-    const BOOL editable = (connected_ && !enabled_) ? TRUE : FALSE;
+    const bool ready = connected_ && !busy_ && model_.Identified();
+    const BOOL connected = ready ? TRUE : FALSE;
+    const BOOL editable = (ready && !enabled_) ? TRUE : FALSE;
     const BOOL any_connected = connected;
     BOOL shared_blocked = FALSE;
     const int slots = EffectiveSlotCount();
@@ -622,9 +598,9 @@ void CSgpioTab::UpdateEnableState() {
                                                      fixed_topology::SgpioOwnerSet()) ? TRUE : FALSE;
     }
 
-    mfc_tool::ui::SafeEnableWindow(enable_btn_, (connected_ && !enabled_ && !shared_blocked) ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(disable_btn_, (connected_ && enabled_) ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(apply_btn_, (connected_ && enabled_) ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(enable_btn_, (ready && model_.CanOutput() && !enabled_ && !shared_blocked) ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(disable_btn_, (ready && model_.output != mfc_tool::core::PinState::Idle) ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(apply_btn_, (ready && model_.CanOutput() && enabled_) ? TRUE : FALSE);
     mfc_tool::ui::SafeEnableWindow(status_btn_, connected);
     mfc_tool::ui::SafeEnableWindow(slot_count_edit_, editable);
     mfc_tool::ui::SafeEnableWindow(clock_edit_, editable);
@@ -636,7 +612,7 @@ void CSgpioTab::UpdateEnableState() {
     mfc_tool::ui::SafeEnableWindow(preset_apply_btn_, any_connected);
     mfc_tool::ui::SafeEnableWindow(clear_all_btn_, any_connected);
     for (i = 0; i < kSgpioSlotMax; ++i) {
-        const BOOL slot_enabled = (connected_ && i < slots) ? TRUE : FALSE;
+        const BOOL slot_enabled = (ready && i < slots) ? TRUE : FALSE;
         mfc_tool::ui::SafeEnableWindow(act_checks_[i], slot_enabled);
         mfc_tool::ui::SafeEnableWindow(locate_checks_[i], slot_enabled);
         mfc_tool::ui::SafeEnableWindow(fail_checks_[i], slot_enabled);
@@ -693,7 +669,7 @@ void CSgpioTab::RefreshPinUsage() {
     }
     pin_usage_->SetLabel(fixed_topology::kSgpio, L"SGPIO Output");
     pin_usage_->SetClaim(fixed_topology::kSgpio, fixed_topology::SgpioPins());
-    pin_usage_->SetActive(fixed_topology::kSgpio, enabled_);
+    pin_usage_->SetActive(fixed_topology::kSgpio, model_.output != mfc_tool::core::PinState::Idle);
 }
 
 void CSgpioTab::ApplyMasksToChecks(int act_mask, int locate_mask, int fail_mask) {
@@ -769,7 +745,7 @@ int CSgpioTab::EffectiveSlotCount() const {
 }
 
 void CSgpioTab::ApplyFromUi(bool enable) {
-    const bool was_enabled = enabled_;
+    if (busy_ || !submit_) return;
     const int slot_count = ParseEditInt(slot_count_edit_);
     const int clock_hz = ParseEditInt(clock_edit_);
     const bool periodic = periodic_check_.GetCheck() == BST_CHECKED;
@@ -791,19 +767,20 @@ void CSgpioTab::ApplyFromUi(bool enable) {
         }
     }
 
-    service_->SgpioConfig(slot_count, clock_hz);
-    service_->SgpioApply(enable, periodic, interval_ms, sload_raw, act_mask, locate_mask, fail_mask);
-    enabled_ = enable;
-    RefreshPinUsage();
-
-    {
-        const std::wstring summary = StatusSummary(enabled_, periodic, slot_count, clock_hz, interval_ms,
-                                                   sload_raw, act_mask, locate_mask, fail_mask, -1);
-        SetStatusText(summary);
-        if (log_) {
-            log_(std::wstring(L"SGPIO ") + (enable ? (was_enabled ? L"applied: " : L"enabled: ") : L"disabled: ") + summary);
+    auto* service = service_;
+    auto status = std::make_shared<mfc_tool::core::OutputSnapshot>();
+    submit_([=] {
+        *status = service->ApplyOutput(slot_count, clock_hz, periodic, interval_ms, sload_raw, act_mask, locate_mask, fail_mask);
+    }, [=](std::exception_ptr error) {
+        if (error) {
+            SetStatusText(L"Operation failed - Get Status required");
+            try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_OK | MB_ICONERROR);
+            }
+            return;
         }
-    }
+        ApplyStatus(*status);
+    });
 }
 
 std::wstring CSgpioTab::AnsiToWide(const char* text) {
@@ -814,8 +791,9 @@ std::wstring CSgpioTab::AnsiToWide(const char* text) {
     if (n <= 0) {
         return L"";
     }
-    std::wstring out(static_cast<size_t>(n - 1), L'\0');
+    std::wstring out(static_cast<size_t>(n), L'\0');
     MultiByteToWideChar(CP_ACP, 0, text, -1, out.data(), n);
+    out.resize(static_cast<size_t>(n - 1));
     return out;
 }
 
@@ -832,11 +810,19 @@ void CSgpioTab::OnBtnEnable() {
 }
 
 void CSgpioTab::OnBtnDisable() {
-    if (!connected_ || service_ == nullptr) {
+    if (!connected_ || busy_ || service_ == nullptr || !submit_) {
         return;
     }
     try {
-        service_->SgpioOff();
+        auto* service = service_;
+        submit_([service] { service->SgpioOff(); }, [this](std::exception_ptr error) {
+        if (error) {
+            SetStatusText(L"Operation failed - Get Status required");
+            try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_OK | MB_ICONERROR);
+            }
+            return;
+        }
         enabled_ = false;
         RefreshPinUsage();
         SetStatusText(L"SGPIO disabled");
@@ -844,6 +830,7 @@ void CSgpioTab::OnBtnDisable() {
         if (log_) {
             log_(L"SGPIO disabled on PA2/PA0/PA3/PA1");
         }
+        });
     } catch (const std::exception& e) {
         ::MessageBoxW(m_hWnd, AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_ICONERROR | MB_OK);
     }
@@ -863,59 +850,51 @@ void CSgpioTab::OnBtnApplyNow() {
 }
 
 void CSgpioTab::OnBtnStatus() {
-    if (!connected_ || service_ == nullptr) {
+    if (!connected_ || busy_ || service_ == nullptr || !submit_) {
         return;
     }
     try {
-        const auto rx = service_->SgpioStatus();
-        if (rx.size() < kSgpioStatusBaseSize) {
-            throw std::runtime_error("invalid SGPIO status payload");
-        }
-
-        enabled_ = rx[0] != 0u;
-        periodic_check_.SetCheck(rx[1] ? BST_CHECKED : BST_UNCHECKED);
-        slot_count_edit_.SetWindowTextW(std::to_wstring(static_cast<int>(rx[2])).c_str());
-        {
-            const int sload_raw = static_cast<int>(rx[3] & 0x0F);
-            const int clock_hz = static_cast<int>(rx[4] | (rx[5] << 8) | (rx[6] << 16) | (rx[7] << 24));
-            const int interval_ms = static_cast<int>(rx[8] | (rx[9] << 8));
-            const int act_mask = static_cast<int>(rx[10] | (rx[11] << 8));
-            const int locate_mask = static_cast<int>(rx[12] | (rx[13] << 8));
-            const int fail_mask = static_cast<int>(rx[14] | (rx[15] << 8));
-            const int sdata_in_level = static_cast<int>(rx[20] & 0x01);
-            const std::wstring sdin_capture = FormatSdinCapture(rx);
-            wchar_t buf[32] = {};
-            std::wstring summary;
-
-            clock_edit_.SetWindowTextW(std::to_wstring(clock_hz).c_str());
-            interval_edit_.SetWindowTextW(std::to_wstring(interval_ms).c_str());
-            swprintf_s(buf, L"0x%X", sload_raw & 0x0F);
-            vendor_edit_.SetWindowTextW(buf);
-            ApplyMasksToChecks(act_mask, locate_mask, fail_mask);
-            SetSdataInText(sdin_capture == L"-" ? std::to_wstring(sdata_in_level) : sdin_capture);
-            summary = StatusSummary(enabled_, rx[1] != 0u, static_cast<int>(rx[2]), clock_hz,
-                                    interval_ms, sload_raw, act_mask, locate_mask, fail_mask, sdata_in_level);
-            if (sdin_capture != L"-") {
-                summary += L" SDIN_RAW=" + sdin_capture;
-            }
-            SetStatusText(summary);
-        }
-        RefreshPinUsage();
-        if (log_) {
-            log_(L"SGPIO status: " + GetEditText(slot_count_edit_) + L" slots, PA2/PA0/PA3/PA1, SDIN=" +
-                 std::wstring(L"") + FormatSdinCapture(rx));
-        }
+        auto rx = std::make_shared<mfc_tool::core::OutputSnapshot>();
+        auto* service = service_;
+        submit_([service, rx] { *rx = mfc_tool::core::SgpioModel::DecodeOutput(service->SgpioStatus()); }, [this, rx](std::exception_ptr error) {
+            if (error) {
+                SetStatusText(L"Unknown - Get Status required");
+                try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                    MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_OK | MB_ICONERROR);
+                }
+            } else { ApplyStatus(*rx); }
+        });
     } catch (const std::exception& e) {
-        ::MessageBoxW(m_hWnd, AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Error", MB_ICONERROR | MB_OK);
     }
-    UpdateEnableState();
+}
+
+void CSgpioTab::ApplyStatus(const mfc_tool::core::OutputSnapshot& status) {
+    enabled_ = status.enabled;
+    periodic_check_.SetCheck(status.periodic ? BST_CHECKED : BST_UNCHECKED);
+    slot_count_edit_.SetWindowTextW(std::to_wstring(status.slots).c_str());
+    clock_edit_.SetWindowTextW(std::to_wstring(status.clock_hz).c_str());
+    interval_edit_.SetWindowTextW(std::to_wstring(status.interval_ms).c_str());
+    wchar_t text[32] = {};
+    swprintf_s(text, L"0x%X", status.sload);
+    vendor_edit_.SetWindowTextW(text);
+    ApplyMasksToChecks(status.act, status.locate, status.fail);
+    const auto capture = FormatSdinCapture(status);
+    SetSdataInText(capture == L"-" ? std::to_wstring(status.sdin_level) : capture);
+    auto summary = StatusSummary(status.enabled, status.periodic, status.slots, status.clock_hz,
+                                 status.interval_ms, status.sload, status.act, status.locate, status.fail, status.sdin_level);
+    if (capture != L"-") summary += L" SDIN_RAW=" + capture;
+    SetStatusText(summary);
+    if (log_) log_(L"SGPIO status: " + summary);
 }
 
 void CSgpioTab::OnBtnPresetApply() {
+    if (busy_) return;
     ApplySelectedSlotPreset();
 }
 
 void CSgpioTab::OnBtnClearAll() {
+    if (busy_) return;
     ApplyMasksToChecks(0, 0, 0);
 }
 

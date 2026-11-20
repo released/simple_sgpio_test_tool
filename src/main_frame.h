@@ -11,6 +11,7 @@
 #include "config/ini_manager.h"
 #include "core/app_state.h"
 #include "core/bridge_service.h"
+#include "core/bridge_job.h"
 #include "core/pin_usage_registry.h"
 #include "log/logger.h"
 #include "ui/sgpio_monitor_tab.h"
@@ -20,6 +21,7 @@ class CMainFrame : public CFrameWnd {
     native_tool_ui::BuildIdentityLabel build_identity_;
 public:
     CMainFrame();
+    explicit CMainFrame(std::unique_ptr<mfc_tool::hid::BridgeTransport> transport);
 
 protected:
     BOOL PreCreateWindow(CREATESTRUCT& cs) override;
@@ -43,6 +45,7 @@ protected:
     afx_msg void OnTabSelChange(NMHDR* notify, LRESULT* result);
     afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
     afx_msg void OnClose();
+    afx_msg void OnTimer(UINT_PTR timer_id);
 
     DECLARE_MESSAGE_MAP()
 
@@ -55,6 +58,10 @@ private:
     void TrimVisibleLogIfNeeded();
     void RefreshDevices();
     void SetConnectionUi(bool connected);
+    bool StartBridgeJob(mfc_tool::core::BridgeJob::Work work, mfc_tool::core::BridgeJob::Completion done);
+    void SyncBridgeUi();
+    void CancelBridgeJob();
+    bool IsBusy() const { return bridge_job_.Busy() || completing_; }
     void UpdateStatusChipColor();
     void UpdateIniPathUi();
     std::wstring SelectedDevicePath() const;
@@ -121,6 +128,12 @@ private:
     mfc_tool::config::IniManager ini_;
     mfc_tool::core::AppState state_;
     mfc_tool::core::BridgeService service_;
+    mfc_tool::core::BridgeJob bridge_job_;
+    mfc_tool::core::SgpioModel model_;
+    bool connected_ = false;
+    bool completing_ = false;
+    bool closing_ = false;
+    bool cancel_pending_ = false;
     mfc_tool::core::PinUsageRegistry pin_usage_;
     mfc_tool::log::Logger logger_;
     std::wstring expected_fw_version_ = M032_EXPECTED_FW_VERSION;

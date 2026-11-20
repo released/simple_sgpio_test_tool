@@ -5,8 +5,8 @@
 IDR_MAINFRAME ICON "res\\p_tool.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,17
- PRODUCTVERSION 1,0,0,17
+ FILEVERSION 1,0,0,21
+ PRODUCTVERSION 1,0,0,21
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS VS_FF_DEBUG
@@ -23,11 +23,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "M032 SGPIO HID Tool Team\0"
             VALUE "FileDescription", "M032 SGPIO HID Tool\0"
-            VALUE "FileVersion", "1.0.0.017\0"
+            VALUE "FileVersion", "1.0.0.021\0"
             VALUE "InternalName", "SgpioHidTool.exe\0"
             VALUE "OriginalFilename", "SgpioHidTool.exe\0"
             VALUE "ProductName", "M032 SGPIO HID Tool\0"
-            VALUE "ProductVersion", "1.0.0.017\0"
+            VALUE "ProductVersion", "1.0.0.021\0"
             VALUE "BuildDateTime", TOOL_BUILD_TIMESTAMP_ISO "\0"
         END
     END

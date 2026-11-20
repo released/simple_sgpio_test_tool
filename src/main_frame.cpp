@@ -51,11 +51,15 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
     ON_NOTIFY(TCN_SELCHANGE, ID_TAB_CTRL, &CMainFrame::OnTabSelChange)
     ON_WM_CTLCOLOR()
     ON_WM_CLOSE()
+    ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 CMainFrame::CMainFrame()
+    : CMainFrame(std::make_unique<mfc_tool::hid::HidBridgeClient>()) {}
+
+CMainFrame::CMainFrame(std::unique_ptr<mfc_tool::hid::BridgeTransport> transport)
     : ini_(mfc_tool::config::IniManager::DefaultIniPath(L"sgpio_hid_tool.ini")),
-      state_(mfc_tool::core::AppState::Default()) {
+      state_(mfc_tool::core::AppState::Default()), service_(std::move(transport)) {
     expected_fw_version_ = M032_EXPECTED_FW_VERSION;
     state_.ui.expected_fw_version = expected_fw_version_;
     current_fw_version_ = state_.ui.last_seen_fw_version;
@@ -133,6 +137,12 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
     sgpio_tab_.Bind(&service_, [this](const std::wstring& msg) { AppendLog(msg); }, &pin_usage_);
     if (!sgpio_monitor_tab_.Create(&tab_ctrl_, tab_dummy, ID_TAB_SGPIO_MONITOR)) return -1;
     sgpio_monitor_tab_.Bind(&service_, [this](const std::wstring& msg) { AppendLog(msg); }, &pin_usage_);
+    const mfc_tool::core::BridgeSubmit submit = [this](auto work, auto done) {
+        return StartBridgeJob(std::move(work), std::move(done));
+    };
+    sgpio_tab_.SetSubmit(submit);
+    sgpio_monitor_tab_.SetSubmit(submit);
+    if (SetTimer(0x5301, 25, nullptr) == 0) return -1;
 
     ApplyTopControlFont();
 
@@ -153,7 +163,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
     LoadIni();
     RefreshDevices();
-    SetConnectionUi(false);
+    SyncBridgeUi();
 
     AppendLog(L"M032 SGPIO HID tool initialized.");
     AppendLog(L"M032 EVB SGPIO host pins: PA2=SCLK, PA0=SDOUT, PA3=SLOAD, PA1=SDIN optional.");
@@ -403,45 +413,6 @@ void CMainFrame::TrimVisibleLogIfNeeded() {
     log_edit_.Invalidate(FALSE);
 }
 
-void CMainFrame::RefreshDevices() {
-    try {
-        int vid = mfc_tool::core::ParseInt(GetControlText(vid_edit_));
-        int pid = mfc_tool::core::ParseInt(GetControlText(pid_edit_));
-        scanned_devices_ = service_.ScanDevices(static_cast<std::uint16_t>(vid), static_cast<std::uint16_t>(pid));
-        std::sort(scanned_devices_.begin(), scanned_devices_.end(), [](const auto& a, const auto& b) {
-            return DeviceLabel(a, 0) < DeviceLabel(b, 0);
-        });
-
-        device_combo_.ResetContent();
-        device_combo_.AddString(L"Auto Select");
-        for (size_t i = 0; i < scanned_devices_.size(); ++i) {
-            device_combo_.AddString(DeviceLabel(scanned_devices_[i], static_cast<int>(i)).c_str());
-        }
-        device_combo_.SetCurSel(scanned_devices_.empty() ? 0 : 1);
-        AppendLog(L"Device scan complete: " + std::to_wstring(scanned_devices_.size()) + L" found");
-    } catch (const std::exception& e) {
-        AppendLog(L"Refresh failed: " + AnsiToWide(e.what()));
-        ShowErrorBox(L"Refresh Error", AnsiToWide(e.what()));
-    }
-}
-
-void CMainFrame::SetConnectionUi(bool connected) {
-    if (!::IsWindow(connect_btn_.GetSafeHwnd())) {
-        return;
-    }
-    mfc_tool::ui::SafeEnableWindow(connect_btn_, !connected);
-    mfc_tool::ui::SafeEnableWindow(disconnect_btn_, connected);
-    mfc_tool::ui::SafeEnableWindow(reset_mcu_btn_, connected);
-    mfc_tool::ui::SafeEnableWindow(return_bootloader_btn_, connected);
-    mfc_tool::ui::SafeEnableWindow(device_combo_, !connected);
-    mfc_tool::ui::SafeEnableWindow(refresh_btn_, !connected);
-    mfc_tool::ui::SafeEnableWindow(save_log_btn_, save_log_check_.GetCheck() == BST_CHECKED);
-    SetControlText(status_chip_, connected ? L"Connected" : L"Disconnected");
-    status_chip_color_ = connected ? RGB(46, 139, 87) : RGB(95, 104, 117);
-    UpdateStatusChipColor();
-    sgpio_tab_.SetConnected(connected);
-    sgpio_monitor_tab_.SetConnected(connected);
-}
 
 void CMainFrame::UpdateStatusChipColor() {
     if (status_chip_brush_.GetSafeHandle()) {
@@ -458,7 +429,7 @@ void CMainFrame::UpdateIniPathUi() {
 std::wstring CMainFrame::SelectedDevicePath() const {
     int sel = device_combo_.GetCurSel();
     if (sel == CB_ERR || sel <= 0) {
-        if (!scanned_devices_.empty()) {
+        if (scanned_devices_.size() == 1) {
             return scanned_devices_.front().path;
         }
         return L"";
@@ -654,99 +625,9 @@ std::wstring CMainFrame::AnsiToWide(const char* text) {
     return out;
 }
 
-void CMainFrame::OnBnClickedRefresh() {
-    RefreshDevices();
-}
-
-void CMainFrame::OnBnClickedConnect() {
-    try {
-        int vid = mfc_tool::core::ParseInt(GetControlText(vid_edit_));
-        int pid = mfc_tool::core::ParseInt(GetControlText(pid_edit_));
-        int timeout = mfc_tool::core::ParseInt(GetControlText(timeout_edit_));
-        std::wstring path = SelectedDevicePath();
-
-        service_.Disconnect();
-        service_.Connect(static_cast<std::uint16_t>(vid), static_cast<std::uint16_t>(pid), path, timeout);
-        SetConnectionUi(true);
-        AppendLog(L"Connected VID:PID");
-        try {
-            auto rx = service_.GetInfo();
-            LogBridgeInfoPayload(rx, true);
-        } catch (const std::exception& info_e) {
-            AppendLog(L"Auto Get Info failed: " + AnsiToWide(info_e.what()));
-        }
-    } catch (const std::exception& e) {
-        ShowErrorBox(L"Connect Error", AnsiToWide(e.what()));
-        AppendLog(L"Connect failed");
-        SetConnectionUi(false);
-    }
-}
-
-void CMainFrame::OnBnClickedDisconnect() {
-    sgpio_tab_.OnDisconnected();
-    sgpio_monitor_tab_.OnDisconnected();
-    service_.Disconnect();
-    SetConnectionUi(false);
-    AppendLog(L"Disconnected");
-}
-
-void CMainFrame::OnBnClickedGetInfo() {
-    try {
-        auto rx = service_.GetInfo();
-        LogBridgeInfoPayload(rx, false);
-    } catch (const std::exception& e) {
-        ShowErrorBox(L"Get Info Error", AnsiToWide(e.what()));
-    }
-}
-
-void CMainFrame::OnBnClickedPing() {
-    try {
-        std::vector<std::uint8_t> tx = {0xA1, 0xB2, 0xC3, 0xD4};
-        auto rx = service_.Ping(tx);
-        AppendLog(L"PING RX: " + mfc_tool::core::HexDump(rx));
-    } catch (const std::exception& e) {
-        ShowErrorBox(L"Ping Error", AnsiToWide(e.what()));
-    }
-}
-
-void CMainFrame::OnBnClickedResetMcu() {
-    try {
-        service_.ResetMcu();
-        AppendLog(L"MCU reset command sent.");
-        sgpio_tab_.OnDisconnected();
-        sgpio_monitor_tab_.OnDisconnected();
-        service_.Disconnect();
-        SetConnectionUi(false);
-        RefreshDevices();
-    } catch (const std::exception& e) {
-        ShowErrorBox(L"Reset MCU Error", AnsiToWide(e.what()));
-    }
-}
-
-void CMainFrame::OnBnClickedReturnBootloader() {
-    const int answer = MessageBoxW(
-        L"Return the bridge board to USB HID bootloader mode?\r\n\r\n"
-        L"This erases the application CRC word. If programming is canceled, the board will stay in bootloader mode until a valid application image is programmed.",
-        L"Return Bootloader",
-        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2);
-    if (answer != IDYES) {
-        return;
-    }
-
-    try {
-        service_.EnterIap();
-        AppendLog(L"Return Bootloader command sent; application CRC invalidated.");
-        AppendLog(L"Use simple_programming_tool after bootloader VID:PID 0416:3F00 enumerates.");
-        sgpio_tab_.OnDisconnected();
-        sgpio_monitor_tab_.OnDisconnected();
-        service_.Disconnect();
-        SetConnectionUi(false);
-    } catch (const std::exception& e) {
-        ShowErrorBox(L"Return Bootloader Error", AnsiToWide(e.what()));
-    }
-}
 
 void CMainFrame::OnBnClickedSaveIni() {
+    if (IsBusy()) return;
     CFileDialog dlg(FALSE, L"ini", L"sgpio_hid_tool.ini",
                     OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY,
                     L"INI Files (*.ini)|*.ini|All Files (*.*)|*.*||", this);
@@ -756,7 +637,8 @@ void CMainFrame::OnBnClickedSaveIni() {
 }
 
 void CMainFrame::OnBnClickedLoadIni() {
-    if (service_.IsConnected()) {
+    if (IsBusy()) return;
+    if (connected_) {
         ShowErrorBox(L"Load INI", L"Disconnect first before loading INI settings.");
         AppendLog(L"Load INI blocked while connected.");
         return;
@@ -772,7 +654,8 @@ void CMainFrame::OnBnClickedLoadIni() {
 }
 
 void CMainFrame::OnBnClickedResetIni() {
-    if (service_.IsConnected()) {
+    if (IsBusy()) return;
+    if (connected_) {
         ShowErrorBox(L"Reset INI", L"Disconnect first before resetting INI settings.");
         AppendLog(L"Reset INI blocked while connected.");
         return;
@@ -811,9 +694,7 @@ void CMainFrame::OnBnClickedClearLog() {
 void CMainFrame::OnTabSelChange(NMHDR* notify, LRESULT* result) {
     UNREFERENCED_PARAMETER(notify);
     ShowSelectedTab();
-    const bool connected = service_.IsConnected();
-    sgpio_tab_.SetConnected(connected);
-    sgpio_monitor_tab_.SetConnected(connected);
+    SyncBridgeUi();
     if (result != nullptr) {
         *result = 0;
     }
@@ -830,9 +711,12 @@ HBRUSH CMainFrame::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor) {
 }
 
 void CMainFrame::OnClose() {
+    if (closing_) return;
+    closing_ = true;
     SaveIni();
-    sgpio_tab_.OnDisconnected();
-    sgpio_monitor_tab_.OnDisconnected();
-    service_.Disconnect();
-    CFrameWnd::OnClose();
+    CancelBridgeJob();
+    if (!IsBusy()) {
+        KillTimer(0x5301);
+        CFrameWnd::OnClose();
+    }
 }

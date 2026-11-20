@@ -41,7 +41,6 @@ enum : UINT {
 
 constexpr UINT_PTR kMonitorPollTimerId = 1u;
 constexpr UINT kMonitorPollIntervalMs = 100u;
-constexpr size_t kMonitorStatusSize = 37u;
 constexpr std::uint8_t kMonitorStateIdle = 0u;
 constexpr std::uint8_t kMonitorStateArmed = 1u;
 constexpr std::uint8_t kMonitorStateCapturing = 2u;
@@ -49,23 +48,6 @@ constexpr std::uint8_t kMonitorStateComplete = 3u;
 constexpr std::uint8_t kMonitorStateTimeout = 4u;
 constexpr std::uint8_t kMonitorStateError = 5u;
 
-std::uint16_t ReadLe16(const std::vector<std::uint8_t>& data, size_t offset) {
-    if (offset + 1u >= data.size()) {
-        return 0u;
-    }
-    return static_cast<std::uint16_t>(data[offset]) |
-           static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[offset + 1u]) << 8u);
-}
-
-std::uint32_t ReadLe32(const std::vector<std::uint8_t>& data, size_t offset) {
-    if (offset + 3u >= data.size()) {
-        return 0u;
-    }
-    return static_cast<std::uint32_t>(data[offset]) |
-           (static_cast<std::uint32_t>(data[offset + 1u]) << 8u) |
-           (static_cast<std::uint32_t>(data[offset + 2u]) << 16u) |
-           (static_cast<std::uint32_t>(data[offset + 3u]) << 24u);
-}
 
 std::wstring HexNibble(std::uint8_t value) {
     wchar_t text[16] = {};
@@ -290,6 +272,19 @@ void CSgpioMonitorTab::SetConnected(bool connected) {
     UpdateEnableState();
 }
 
+void CSgpioMonitorTab::SetRuntime(bool busy, const mfc_tool::core::SgpioModel& model) {
+    busy_ = busy;
+    model_ = model;
+    armed_ = model.monitor == mfc_tool::core::PinState::Active;
+    if (model.monitor == mfc_tool::core::PinState::Unknown) {
+        StopPolling();
+        state_value_.SetWindowTextW(connected_ ? L"Unknown - Get Status required" : L"Disconnected - state unknown");
+    }
+    if (connected_ && !busy_ && armed_ && !polling_) StartPolling();
+    RefreshPinUsage();
+    UpdateEnableState();
+}
+
 void CSgpioMonitorTab::OnDisconnected() {
     connected_ = false;
     armed_ = false;
@@ -369,11 +364,12 @@ void CSgpioMonitorTab::UpdateEnableState() {
         shared_blocked = pin_usage_->AnyActiveExcept(fixed_topology::SharedFixedTopologyOwners(),
                                                      fixed_topology::SgpioMonitorOwnerSet()) ? TRUE : FALSE;
     }
-    mfc_tool::ui::SafeEnableWindow(arm_btn_, connected_ && !armed_ && !shared_blocked ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(stop_btn_, connected_ && armed_ ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(status_btn_, connected_ ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(expected_slot_combo_, connected_ && !armed_ ? TRUE : FALSE);
-    mfc_tool::ui::SafeEnableWindow(timeout_edit_, connected_ && !armed_ ? TRUE : FALSE);
+    const bool ready = connected_ && !busy_ && model_.monitor_supported;
+    mfc_tool::ui::SafeEnableWindow(arm_btn_, ready && model_.CanMonitor() && !shared_blocked ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(stop_btn_, ready && model_.monitor != mfc_tool::core::PinState::Idle ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(status_btn_, ready ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(expected_slot_combo_, ready && !armed_ ? TRUE : FALSE);
+    mfc_tool::ui::SafeEnableWindow(timeout_edit_, ready && !armed_ ? TRUE : FALSE);
 }
 
 void CSgpioMonitorTab::RefreshPinUsage() {
@@ -382,7 +378,7 @@ void CSgpioMonitorTab::RefreshPinUsage() {
     }
     pin_usage_->SetLabel(fixed_topology::kSgpioMonitor, L"SGPIO Monitor");
     pin_usage_->SetClaim(fixed_topology::kSgpioMonitor, fixed_topology::SgpioMonitorPins());
-    pin_usage_->SetActive(fixed_topology::kSgpioMonitor, armed_);
+    pin_usage_->SetActive(fixed_topology::kSgpioMonitor, model_.monitor != mfc_tool::core::PinState::Idle);
 }
 
 void CSgpioMonitorTab::StartPolling() {
@@ -406,6 +402,7 @@ void CSgpioMonitorTab::OnTimer(UINT_PTR timer_id) {
 }
 
 void CSgpioMonitorTab::OnBtnArm() {
+    if (busy_ || !submit_) return;
     try {
         if (!connected_ || service_ == nullptr) {
             throw std::runtime_error("bridge is not connected");
@@ -425,12 +422,19 @@ void CSgpioMonitorTab::OnBtnArm() {
             throw std::runtime_error("one or more monitor pins are already occupied");
         }
 
-        service_->SgpioMonitorConfig(ExpectedSlotCount(), timeout_ms);
-        const auto response = service_->SgpioMonitorArm();
-        if (response.empty() || response[0] != kMonitorStateArmed) {
-            throw std::runtime_error("firmware did not enter Armed state");
+        auto* service = service_;
+        const int slots = ExpectedSlotCount();
+        submit_([service, slots, timeout_ms] {
+            service->SgpioMonitorConfig(slots, timeout_ms);
+            service->SgpioMonitorArm();
+        }, [this](std::exception_ptr error) {
+        if (error) {
+            state_value_.SetWindowTextW(L"Operation failed - Get Status required");
+            try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Monitor", MB_OK | MB_ICONERROR);
+            }
+            return;
         }
-
         armed_ = true;
         current_state_ = kMonitorStateArmed;
         state_value_.SetWindowTextW(L"Armed - waiting for SLOAD falling edge");
@@ -441,6 +445,7 @@ void CSgpioMonitorTab::OnBtnArm() {
         if (log_) {
             log_(L"SGPIO Monitor armed: PA6=SCLOCK, PA4=SDATA, PA5=SLOAD.");
         }
+        });
     } catch (const std::exception& e) {
         const std::wstring message = AnsiToWide(e.what());
         if (log_) {
@@ -451,11 +456,18 @@ void CSgpioMonitorTab::OnBtnArm() {
 }
 
 void CSgpioMonitorTab::OnBtnStop() {
+    if (busy_ || !connected_ || !service_ || !submit_) return;
     try {
-        if (service_ != nullptr && connected_) {
-            service_->SgpioMonitorStop();
-        }
+        auto* service = service_;
+        submit_([service] { service->SgpioMonitorStop(); }, [this](std::exception_ptr error) {
         StopPolling();
+        if (error) {
+            state_value_.SetWindowTextW(L"Operation failed - Get Status required");
+            try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                MessageBoxW(AnsiToWide(e.what()).c_str(), L"SGPIO Monitor", MB_OK | MB_ICONERROR);
+            }
+            return;
+        }
         armed_ = false;
         current_state_ = kMonitorStateIdle;
         state_value_.SetWindowTextW(L"Idle");
@@ -464,6 +476,7 @@ void CSgpioMonitorTab::OnBtnStop() {
         if (log_) {
             log_(L"SGPIO Monitor stopped.");
         }
+        });
     } catch (const std::exception& e) {
         const std::wstring message = AnsiToWide(e.what());
         if (log_) {
@@ -478,11 +491,23 @@ void CSgpioMonitorTab::OnBtnStatus() {
 }
 
 void CSgpioMonitorTab::ReadAndDisplayStatus(bool from_poll) {
+    if (busy_ || !connected_ || !service_ || !submit_) return;
     try {
         if (!connected_ || service_ == nullptr) {
             throw std::runtime_error("bridge is not connected");
         }
-        ApplyStatus(service_->SgpioMonitorStatus());
+        auto data = std::make_shared<mfc_tool::core::MonitorSnapshot>();
+        auto* service = service_;
+        submit_([service, data] { *data = mfc_tool::core::SgpioModel::DecodeMonitor(service->SgpioMonitorStatus()); }, [this, data, from_poll](std::exception_ptr error) {
+            if (!error) { ApplyStatus(*data); return; }
+            StopPolling();
+            state_value_.SetWindowTextW(L"Unknown - Get Status required");
+            try { std::rethrow_exception(error); } catch (const std::exception& e) {
+                const auto message = AnsiToWide(e.what());
+                if (log_) log_(L"SGPIO Monitor status unknown: " + message);
+                if (!from_poll) MessageBoxW(message.c_str(), L"SGPIO Monitor", MB_OK | MB_ICONERROR);
+            }
+        });
     } catch (const std::exception& e) {
         const std::wstring message = AnsiToWide(e.what());
         if (log_) {
@@ -490,36 +515,30 @@ void CSgpioMonitorTab::ReadAndDisplayStatus(bool from_poll) {
         }
         if (from_poll) {
             StopPolling();
-            armed_ = false;
-            RefreshPinUsage();
-            UpdateEnableState();
+            state_value_.SetWindowTextW(L"Unknown - Get Status required");
         } else {
             MessageBoxW(message.c_str(), L"SGPIO Monitor", MB_OK | MB_ICONERROR);
         }
     }
 }
 
-void CSgpioMonitorTab::ApplyStatus(const std::vector<std::uint8_t>& data) {
-    if (data.size() < kMonitorStatusSize) {
-        throw std::runtime_error("monitor status response is shorter than 37 bytes");
-    }
-
+void CSgpioMonitorTab::ApplyStatus(const mfc_tool::core::MonitorSnapshot& status) {
     const bool was_armed = armed_;
-    const std::uint8_t state = data[0];
-    const int expected_slots = static_cast<int>(data[1]);
-    const int detected_slots = static_cast<int>(data[2]);
-    const std::uint8_t sload_raw = data[3];
-    const std::uint16_t errors = ReadLe16(data, 4u);
-    const std::uint16_t samples = ReadLe16(data, 6u);
-    const std::uint16_t rising_edges = ReadLe16(data, 8u);
-    const std::uint16_t decoded_bits = ReadLe16(data, 10u);
-    const std::uint32_t sample_rate = ReadLe32(data, 12u);
-    const std::uint32_t clock_hz = ReadLe32(data, 16u);
-    const std::uint32_t high_ns = ReadLe32(data, 20u);
-    const std::uint32_t low_ns = ReadLe32(data, 24u);
-    const std::uint16_t act_mask = ReadLe16(data, 28u);
-    const std::uint16_t locate_mask = ReadLe16(data, 30u);
-    const std::uint16_t fail_mask = ReadLe16(data, 32u);
+    const auto state = status.state;
+    const int expected_slots = status.expected_slots;
+    const int detected_slots = status.detected_slots;
+    const auto sload_raw = status.sload;
+    const auto errors = status.errors;
+    const auto samples = status.samples;
+    const auto rising_edges = status.rising_edges;
+    const auto decoded_bits = status.decoded_bits;
+    const auto sample_rate = status.sample_rate;
+    const auto clock_hz = status.clock_hz;
+    const auto high_ns = status.high_ns;
+    const auto low_ns = status.low_ns;
+    const auto act_mask = status.act;
+    const auto locate_mask = status.locate;
+    const auto fail_mask = status.fail;
     std::wstringstream text;
 
     current_state_ = state;
